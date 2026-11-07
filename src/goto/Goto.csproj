@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>QbanRambo.Goto</AssemblyName>
+    <RootNamespace>QbanRambo.Goto</RootNamespace>
+    <Version>1.6.0</Version>
+    <Product>QbanRambo's Goto</Product>
+    <Authors>QbanRambo</Authors>
+    <Company>QbanRambo</Company>
+    <Copyright>Copyright (c) 2026 QbanRambo</Copyright>
+    <Description>Go to submenu for locomotives in Railroader: send the AE to a waybill destination or a town location, line passenger cars up at stations, and refuel at water, coal and diesel loaders.</Description>
+    <DebugType>none</DebugType>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>10.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <RailroaderDir Condition="'$(RailroaderDir)' == '' and '$(RAILROADER_DIR)' != ''">$(RAILROADER_DIR)</RailroaderDir>
+    <RailroaderDir Condition="'$(RailroaderDir)' == ''">F:\SteamLibrary\steamapps\common\Railroader</RailroaderDir>
+    <RailroaderManaged>$(RailroaderDir)\Railroader_Data\Managed</RailroaderManaged>
+    <PackDir>$(MSBuildThisFileDirectory)..\..\mods\goto</PackDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Lib.Harmony" Version="2.3.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Railroader" HintPath="$(RailroaderManaged)\Railroader.dll" Private="false" />
+    <Reference Include="Railroader.Modding" HintPath="$(RailroaderManaged)\Railroader.Modding.dll" Private="false" />
+    <Reference Include="Core" HintPath="$(RailroaderManaged)\Core.dll" Private="false" />
+    <Reference Include="KeyValue.Runtime" HintPath="$(RailroaderManaged)\KeyValue.Runtime.dll" Private="false" />
+    <Reference Include="UnityEngine" HintPath="$(RailroaderManaged)\UnityEngine.dll" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(RailroaderManaged)\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.UIModule" HintPath="$(RailroaderManaged)\UnityEngine.UIModule.dll" Private="false" />
+    <Reference Include="UnityEngine.UI" HintPath="$(RailroaderManaged)\UnityEngine.UI.dll" Private="false" />
+    <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(RailroaderManaged)\UnityEngine.TextRenderingModule.dll" Private="false" />
+    <Reference Include="UnityEngine.UnityWebRequestModule" HintPath="$(RailroaderManaged)\UnityEngine.UnityWebRequestModule.dll" Private="false" />
+    <Reference Include="Newtonsoft.Json" HintPath="$(RailroaderManaged)\Newtonsoft.Json.dll" Private="false" />
+  </ItemGroup>
+
+  <Target Name="CopyToPack" AfterTargets="Build">
+    <Copy SourceFiles="$(OutDir)QbanRambo.Goto.dll;$(OutDir)0Harmony.dll" DestinationFolder="$(PackDir)" />
+  </Target>
+
+</Project>

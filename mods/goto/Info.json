@@ -1,0 +1,16 @@
+{
+  "identifier": "qbanrambo/goto",
+  "version": "1.6.0",
+  "name": "QbanRambo's Goto",
+  "author": "QbanRambo",
+  "url": "https://www.nexusmods.com/railroader/mods/1887",
+  "description": "Adds Go to to a locomotive's context menu and the engineer's panel: pick a waybill destination or any unlocked town location and the AE drives the train there, delivering the cars waybilled there, coupling to the cars waiting on the track, pushing the cars into dead ends if you like, lining passenger cars up at stations, refuelling at water, coal and diesel loaders, turning the engine on turntables and running around its cars.",
+  "license": "MIT",
+  "scope": "optional",
+  "assemblies": ["QbanRambo.Goto.dll"],
+  "dependencies": {
+    "required": [
+      "rr/game >=0.6.0"
+    ]
+  }
+}

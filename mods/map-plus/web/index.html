@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Map Plus</title>
+  <link rel="stylesheet" href="/map-plus/app.css">
+</head>
+<body>
+  <canvas id="map"></canvas>
+  <div class="search" id="search">
+    <svg class="search-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+    <input id="search-input" type="text" placeholder="Search trains, towns, places, cars…" autocomplete="off" spellcheck="false">
+    <kbd>/</kbd>
+    <div class="results hidden" id="search-results"></div>
+  </div>
+  <div class="toolbar" id="toolbar">
+    <button data-action="zoom-in" title="Zoom in"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button data-action="zoom-out" title="Zoom out"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+    <span class="separator"></span>
+    <button data-action="fit" title="Whole map"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6.5"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4"/></svg></button>
+    <button data-action="sync" id="sync" title="Sync with the game (G)"><svg viewBox="0 0 24 24"></svg></button>
+    <button data-action="trains" title="Trains (T)"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></button>
+    <button data-action="layers" title="Layers (L)"><svg viewBox="0 0 24 24"><path d="M12 3.5l9 5-9 5-9-5 9-5z"/><path d="M3 13.5l9 5 9-5"/></svg></button>
+    <button data-action="fullscreen" title="Full screen"><svg viewBox="0 0 24 24"><path d="M8.5 3.5h-5v5M15.5 3.5h5v5M8.5 20.5h-5v-5M15.5 20.5h5v-5"/></svg></button>
+  </div>
+  <div class="card hidden" id="layers"></div>
+  <aside class="side-panel hidden" id="panel"></aside>
+  <div class="legend hidden" id="legend"></div>
+  <div class="footer">
+    <div class="scale" id="scale"><span id="scale-text"></span><i id="scale-bar"></i></div>
+    <div class="status" id="status"><span class="terrain" id="terrain-text"></span><span class="dot"></span><span id="status-text">Connecting</span></div>
+  </div>
+  <div class="tooltip hidden" id="tooltip"></div>
+  <div class="notice hidden" id="notice"></div>
+  <div class="menu hidden" id="menu"></div>
+  <div class="toast hidden" id="toast"></div>
+  <script src="/map-plus/app.js"></script>
+</body>
+</html>

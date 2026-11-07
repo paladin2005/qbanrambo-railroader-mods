@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>QbanRambo.MapPlus</AssemblyName>
+    <RootNamespace>QbanRambo.MapPlus</RootNamespace>
+    <Version>1.6.0</Version>
+    <Product>Map Plus</Product>
+    <Authors>QbanRambo</Authors>
+    <Company>QbanRambo</Company>
+    <Copyright>Copyright (c) 2026 QbanRambo</Copyright>
+    <Description>Every car and signal on Railroader's map, the selected train's route, track class colors, train alerts, right-click to send trains, navigation, wider zoom, and a live web map for a second monitor.</Description>
+    <DebugType>none</DebugType>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>10.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <RailroaderDir Condition="'$(RailroaderDir)' == '' and '$(RAILROADER_DIR)' != ''">$(RAILROADER_DIR)</RailroaderDir>
+    <RailroaderDir Condition="'$(RailroaderDir)' == ''">F:\SteamLibrary\steamapps\common\Railroader</RailroaderDir>
+    <RailroaderManaged>$(RailroaderDir)\Railroader_Data\Managed</RailroaderManaged>
+    <PackDir>$(MSBuildThisFileDirectory)..\..\mods\map-plus</PackDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Lib.Harmony" Version="2.3.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Railroader" HintPath="$(RailroaderManaged)\Railroader.dll" Private="false" />
+    <Reference Include="Railroader.Modding" HintPath="$(RailroaderManaged)\Railroader.Modding.dll" Private="false" />
+    <Reference Include="Core" HintPath="$(RailroaderManaged)\Core.dll" Private="false" />
+    <Reference Include="KeyValue.Runtime" HintPath="$(RailroaderManaged)\KeyValue.Runtime.dll" Private="false" />
+    <Reference Include="Map.Runtime" HintPath="$(RailroaderManaged)\Map.Runtime.dll" Private="false" />
+    <Reference Include="Newtonsoft.Json" HintPath="$(RailroaderManaged)\Newtonsoft.Json.dll" Private="false" />
+    <Reference Include="WebSocketSharp" HintPath="$(RailroaderManaged)\WebSocketSharp.dll" Private="false" />
+    <Reference Include="Unity.TextMeshPro" HintPath="$(RailroaderManaged)\Unity.TextMeshPro.dll" Private="false" />
+    <Reference Include="UnityEngine" HintPath="$(RailroaderManaged)\UnityEngine.dll" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(RailroaderManaged)\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.InputLegacyModule" HintPath="$(RailroaderManaged)\UnityEngine.InputLegacyModule.dll" Private="false" />
+    <Reference Include="UnityEngine.PhysicsModule" HintPath="$(RailroaderManaged)\UnityEngine.PhysicsModule.dll" Private="false" />
+    <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(RailroaderManaged)\UnityEngine.TextRenderingModule.dll" Private="false" />
+    <Reference Include="UnityEngine.UI" HintPath="$(RailroaderManaged)\UnityEngine.UI.dll" Private="false" />
+    <Reference Include="UnityEngine.UIModule" HintPath="$(RailroaderManaged)\UnityEngine.UIModule.dll" Private="false" />
+    <Reference Include="UnityEngine.UnityWebRequestModule" HintPath="$(RailroaderManaged)\UnityEngine.UnityWebRequestModule.dll" Private="false" />
+  </ItemGroup>
+
+  <Target Name="CopyToPack" AfterTargets="Build">
+    <Copy SourceFiles="$(OutDir)QbanRambo.MapPlus.dll;$(OutDir)0Harmony.dll" DestinationFolder="$(PackDir)" />
+  </Target>
+
+</Project>

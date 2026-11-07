@@ -1,0 +1,16 @@
+{
+  "identifier": "qbanrambo/map-plus",
+  "version": "1.6.0",
+  "name": "Map Plus",
+  "author": "QbanRambo",
+  "url": "https://www.nexusmods.com/railroader/mods/1894",
+  "description": "The game's terrain painted under the map, and every car on it colored by destination, with alerts and hover details, every industry, station and fuel stop with its cars, plus signals, fusees, the selected train's route, destinations and orders, track class colors and train alerts. Click a train to select it, right-click the track to send it there or place a fusee, find anything from the toolbar. Wider zoom, and a live web map with painted terrain in your browser for a second monitor.",
+  "license": "MIT",
+  "scope": "optional",
+  "assemblies": ["QbanRambo.MapPlus.dll"],
+  "dependencies": {
+    "required": [
+      "rr/game >=0.6.0"
+    ]
+  }
+}

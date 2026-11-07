@@ -1,0 +1,15 @@
+{
+  "identifier": "qbanrambo/train-orders",
+  "version": "1.7.0",
+  "name": "Train Orders",
+  "author": "QbanRambo",
+  "url": "https://www.nexusmods.com/railroader/mods/1901",
+  "description": "Chained orders for the auto engineer: queue waypoints, couplings, pick-ups, cuts, run arounds, waits until loaded or until a set time, passenger stations, refuelling and turntable moves, see the train before and after each one, save whole jobs for any engine, and run them in order or on repeat, with air and handbrakes handled.",
+  "license": "MIT",
+  "assemblies": ["QbanRambo.TrainOrders.dll"],
+  "dependencies": {
+    "required": [
+      "rr/game >=0.6.0"
+    ]
+  }
+}

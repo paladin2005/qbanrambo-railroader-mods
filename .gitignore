@@ -1,0 +1,8 @@
+dist/
+src/*/bin/
+src/*/obj/
+mods/*/*.dll
+.vs/
+.idea/
+*.user
+Thumbs.db
