@@ -3,7 +3,7 @@
   <PropertyGroup>
     <AssemblyName>QbanRambo.TrainOrders</AssemblyName>
     <RootNamespace>QbanRambo.TrainOrders</RootNamespace>
-    <Version>1.7.0</Version>
+    <Version>1.8.0</Version>
     <Product>Train Orders</Product>
     <Authors>QbanRambo</Authors>
     <Company>QbanRambo</Company>

@@ -173,7 +173,7 @@ internal static class Maneuvers
     return side == CutSide.Rear ? front : back;
   }
 
-  private static bool IsCar(Car car) => car is not BaseLocomotive && !car.CarType.IsTender;
+  internal static bool IsCar(Car car) => car is not BaseLocomotive && !car.CarType.IsTender;
 
   private static void SetAnglecock(Car car, Car.LogicalEnd end, bool open)
   {

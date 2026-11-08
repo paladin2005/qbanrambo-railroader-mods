@@ -253,7 +253,7 @@ internal sealed class FuelRun
     OrderCapture.Dispatching = true;
     try
     {
-      Helper().SetWaypointOrder(waypoint);
+      Helper().SetWaypointOrder(waypoint, Dispatcher.SpeedFor(_locomotive));
     }
     finally
     {

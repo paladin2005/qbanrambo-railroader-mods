@@ -36,16 +36,16 @@ internal static class TurntableMenu
     var consist = new HashSet<Car>(locomotive.EnumerateCoupled());
     var items = new List<MenuItem>
     {
-      MenuItem.Action("Turn around", () => Send(locomotive, site, null), "Turn the engine and come back off the same track")
+      MenuItem.Action("Turn around", TurntableHighlight.Register(() => Send(locomotive, site, null), new[] { site.Turntable.BridgeSegment }), "Turn the engine and come back off the same track")
     };
     foreach (var track in site.Tracks.Where(track => track.Stall))
     {
       var occupied = Turntables.IsOccupied(track, consist);
-      items.Add(MenuItem.Action(track.Label, () => Send(locomotive, site, track), occupied ? "Occupied" : "Park the engine in it, front first", disabled: occupied));
+      items.Add(MenuItem.Action(track.Label, TurntableHighlight.Register(() => Send(locomotive, site, track), track.Segments.ToList()), occupied ? "Occupied" : "Park the engine in it, front first", disabled: occupied));
     }
     foreach (var track in site.Tracks.Where(track => !track.Stall))
     {
-      items.Add(MenuItem.Action(track.Label, () => Send(locomotive, site, track), "Leave on this track, front first"));
+      items.Add(MenuItem.Action(track.Label, TurntableHighlight.Register(() => Send(locomotive, site, track), track.Segments.ToList()), "Leave on this track, front first"));
     }
     return items;
   }

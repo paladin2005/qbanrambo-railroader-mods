@@ -127,6 +127,20 @@ internal sealed class ConsistStrip : MonoBehaviour
 
   internal static Color ColorFor(ForecastCar car, OpsController ops) => Describe(car, ops, false, false).Color;
 
+  internal static object Web(ForecastResult result)
+  {
+    var ops = OpsController.Shared;
+    return new
+    {
+      b = result.Before.Select(car => WebCar(Describe(car, ops, false, result.Leaving.Contains(car.Id)))).ToList(),
+      a = result.After.Select(car => WebCar(Describe(car, ops, result.Added.Contains(car.Id), false))).ToList(),
+      p = result.Problem,
+      tip = TooltipText(result)
+    };
+  }
+
+  private static object WebCar(StripCar car) => new { k = car.Shape.ToString().ToLowerInvariant(), c = "#" + ColorUtility.ToHtmlStringRGB(car.Color), n = car.Added, l = car.Leaving };
+
   private static StripCar Describe(ForecastCar car, OpsController ops, bool added, bool leaving)
   {
     if (car.IsUnknown) return new StripCar(CarShape.Unknown, UnknownColor, added, leaving);

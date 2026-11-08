@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Track;
 using UI;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -38,6 +40,34 @@ internal static class Ghosts
       _logged = true;
       TrainOrdersMod.Log?.Error(exception, "Couldn't draw the train forecast on the track");
     }
+  }
+
+  internal static void ShowTrack(OrdersWindow owner, IReadOnlyList<TrackSegment> segments)
+  {
+    Remove();
+    _owner = owner;
+    _shown = null;
+    if (segments == null || segments.Count == 0) return;
+    try
+    {
+      var indicators = SegmentIndicatorController.Shared;
+      if (indicators != null) Tokens.Add(indicators.Add(segments));
+    }
+    catch (Exception exception)
+    {
+      if (_logged) return;
+      _logged = true;
+      TrainOrdersMod.Log?.Error(exception, "Couldn't light the turntable track");
+    }
+  }
+
+  internal static IReadOnlyList<TrackSegment> TurntableTrack(OrderStep step)
+  {
+    if (step == null || step.Kind != StepKind.Turntable) return null;
+    var site = Turntables.Find(step.TurntableId);
+    if (site == null) return null;
+    if (!step.Exit.HasValue) return site.Turntable.BridgeSegment != null ? new[] { site.Turntable.BridgeSegment } : null;
+    return site.Tracks.FirstOrDefault(track => track.Index == step.Exit.Value)?.Segments.ToList();
   }
 
   private static bool ShowsChevrons(ForecastCar car) => car.Car != null && (car.Car.CarType.IsLocomotive || car.Car.CarType.IsTender);

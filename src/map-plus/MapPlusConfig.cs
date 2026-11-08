@@ -10,6 +10,9 @@ internal static class MapPlusConfig
 {
   private const string FileName = "map-plus.cfg";
   private const string InGameKey = "EnableMapInGame";
+  private const string ClickSelectsKey = "qbanrambo.map-plus.click-selects";
+
+  private static bool? _clickSelects;
 
   internal static string FilePath { get; private set; }
 
@@ -25,7 +28,17 @@ internal static class MapPlusConfig
     {
       ModsTab.Toggle(section, "On the game's map", () => MapInGameSaved, SetMapInGame, $"On: Map Plus adds its layers, buttons and tools to the game's map. Off: the game's map is left alone and only the web map runs (http://localhost:8630/map-plus). Saved in {FileName}; takes effect the next time Railroader starts.");
       section.AddLabel(() => MapInGameSaved != MapPlusMod.MapEnabled ? ModsTab.Note("Restart Railroader to apply this.") : "", UIPanelBuilder.Frequency.Periodic);
+      ModsTab.Toggle(section, "Click selects the train", () => ClickSelects, SetClickSelects, "On: a click on a car or locomotive on the game's map selects its train and opens the Inspect window. Off: like the game's own map, a click opens the Inspect window and Shift-click selects the train.");
     });
+  }
+
+  internal static bool ClickSelects => _clickSelects ??= GlobalPreferences.GetInt(ClickSelectsKey, 0) != 0;
+
+  private static void SetClickSelects(bool on)
+  {
+    _clickSelects = on;
+    GlobalPreferences.SetInt(ClickSelectsKey, on ? 1 : 0);
+    GlobalPreferences.Flush();
   }
 
   private static void SetMapInGame(bool on)

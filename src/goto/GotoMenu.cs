@@ -87,8 +87,8 @@ internal static class GotoMenu
 
   private static IReadOnlyList<MenuItem> DeliverItems(BaseLocomotive locomotive, OpsCarPosition position)
   {
-    var count = Delivery.Count(locomotive, position.Identifier);
-    var ready = Delivery.Block(locomotive, position.Identifier, out _) != null;
+    var count = Delivery.Count(locomotive, position);
+    var ready = Delivery.Block(locomotive, position, out _) != null;
     var items = new List<MenuItem>
     {
       MenuItem.Action($"Deliver {Delivery.Cars(count)}", () => Delivery.Send(locomotive, position), ready ? "Leave them on the track, the engine goes free" : "Not together at one end of the train", !ready)
@@ -180,6 +180,7 @@ internal static class GotoMenu
       }
       var helper = new AutoEngineerOrdersHelper(locomotive, new AutoEngineerPersistence(locomotive.KeyValueObject));
       AppDomain.CurrentDomain.SetData(CapturedKey, null);
+      AppDomain.CurrentDomain.SetData(CoupleWatch.WatchedKey, true);
       try
       {
         helper.SetWaypointOrder(order.Value);
@@ -188,6 +189,7 @@ internal static class GotoMenu
       finally
       {
         AppDomain.CurrentDomain.SetData(CapturedKey, null);
+        AppDomain.CurrentDomain.SetData(CoupleWatch.WatchedKey, null);
       }
       CoupleWatch.Begin(locomotive, car, order.Value.LocationString);
       var released = GotoSettings.ReleaseHandbrakes ? ReleaseHandbrakes(locomotive) : 0;
@@ -203,18 +205,28 @@ internal static class GotoMenu
 
   private static List<Place> WaybillDestinations(BaseLocomotive locomotive)
   {
+    List<Place> towns = null;
     return locomotive.EnumerateCoupled()
       .Where(car => car.Waybill.HasValue && !car.Waybill.Value.Completed)
-      .GroupBy(car => car.Waybill.Value.Destination.Identifier)
+      .GroupBy(car => Delivery.KeyFor(car.Waybill.Value.Destination))
       .Select(group =>
       {
         var position = group.First().Waybill.Value.Destination;
         var cars = group.Count();
-        return new Place($"{position.DisplayName} ({cars} {(cars == 1 ? "car" : "cars")})", position, cars);
+        var names = group.Select(car => car.Waybill.Value.Destination.DisplayName).Distinct().ToList();
+        var name = names.Count == 1 ? names[0] : TrackName(group.Key, ref towns) ?? names[0];
+        if (names.Count > 1 && position.Spans != null && position.Spans.Length > 0) position = new OpsCarPosition(name, position.Identifier, position.Spans);
+        return new Place($"{name} ({cars} {(cars == 1 ? "car" : "cars")})", position, cars);
       })
       .OrderByDescending(place => place.Cars)
       .ThenBy(place => place.Label)
       .ToList();
+  }
+
+  private static string TrackName(string key, ref List<Place> places)
+  {
+    places ??= Towns().SelectMany(town => town.Places).ToList();
+    return places.FirstOrDefault(place => Delivery.KeyFor(place.Position) == key)?.Label;
   }
 
   private static List<Town> Towns()
@@ -277,7 +289,7 @@ internal static class GotoMenu
     };
   }
 
-  private static string SpanKey(TrackSpan span)
+  internal static string SpanKey(TrackSpan span)
   {
     return string.IsNullOrEmpty(span.id) ? span.GetInstanceID().ToString() : span.id;
   }

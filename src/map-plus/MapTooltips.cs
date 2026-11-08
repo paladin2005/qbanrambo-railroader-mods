@@ -72,7 +72,11 @@ internal sealed class MapTooltips : MonoBehaviour
       var radius = PickRadius * metersPerUnit;
       var point = WorldTransformer.WorldToGame(ray.origin);
       if (OrderMarkers.At(point, out var orderKey) is { } orders) return Cached(orderKey, () => orders);
-      if (PlaceIcons.At(point) is { } poi) return Cached(poi, () => PlaceIcons.Tooltip(poi));
+      if (PlaceIcons.At(point) is { } poi)
+      {
+        PlaceIcons.MarkHovered(poi);
+        return Cached(poi, () => PlaceIcons.Tooltip(poi));
+      }
       if (MapPlusMod.Fusees.IsOn && FuseeIcons.At(point, radius) is { } fusee)
       {
         return Cached(fusee.Key, () => new TooltipInfo("Fusee", "The engineer stops here.\n<alpha=#99>Right-click the track to put it out"));
@@ -134,7 +138,7 @@ internal sealed class MapTooltips : MonoBehaviour
     return _last;
   }
 
-  private static Car CarAt(Ray ray)
+  internal static Car CarAt(Ray ray)
   {
     var camera = MapBuilder.Shared.mapCamera;
     if (!Physics.Raycast(ray, out var hit, camera.transform.position.y, 1 << Layers.Map)) return null;

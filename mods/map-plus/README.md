@@ -1,6 +1,6 @@
 # Map Plus
 
-Paints the game's terrain under Railroader's map, with its rivers, lakes and mountains, and shows every car on it, not just locomotives, colored by the town it's waybilled to and flagged when something's wrong, and every industry, station and fuel stop with its cars. Click a train to select it and see its route, where its cars are going and its Train Orders. Shows every signal, the class of every track, and trains in trouble. Right-click the track to send the selected locomotive there or to place a fusee. Industry tracks and the mainline get their own colors. Hover any car, locomotive, place, signal or track for its details, find anything from the toolbar, jump the map to any town or train, follow a train, and zoom out further. And open a live map of the whole railroad in your browser, for a second monitor.
+Paints the game's terrain under Railroader's map, with its rivers, lakes and mountains, and shows every car on it, not just locomotives, colored by the town it's waybilled to and flagged when something's wrong, and every industry, station and fuel stop with its cars. Shift-click a train to select it and see its route, where its cars are going and its Train Orders. Shows every signal, the class of every track, and trains in trouble. Right-click the track or a car to send the selected locomotive there, couple it or place a fusee. Industry tracks and the mainline get their own colors. Hover any car, locomotive, place, signal or track for its details, find anything from the toolbar, jump the map to any town or train, follow a train, and zoom out further. And open a live map of the whole railroad in your browser, for a second monitor, where you can also send trains and run Train Orders.
 
 ## Requirements
 
@@ -36,7 +36,7 @@ Open the map. Every car shows as an outline as long as the car, with its reporti
 - **Darker** once it's spotted at its destination.
 - **White** when it has no waybill, and for cars that don't carry freight, such as coaches and cabooses.
 
-Click a car or locomotive to select its train and inspect the car you clicked; Shift-click only selects. Clicking a car selects the locomotive of its train (or the car itself, when no locomotive is coupled). The selected train is outlined in cyan.
+Click a car or locomotive to inspect it, and Shift-click it to select its train, as on the game's own map. Shift-clicking a car selects the locomotive of its train (or the car itself, when no locomotive is coupled). The selected train is outlined in cyan. To select the train with a plain click as well, check **Click selects the train** in **Preferences > Mods > Map Plus**.
 
 Hover a car to see its reporting mark and number, type, load, destination and any hotbox, low oil or handbrake. Hover a locomotive to see its speed, cars, length, fuel, where its cars are headed and how many handbrakes are set.
 
@@ -50,7 +50,7 @@ A dot at one end of a car warns you without hovering:
 
 Every industry, station, interchange and engine terminal you can reach shows as an icon by type: mines, logging, mills, freight customers, fuel dealers, track materials, interchanges, passenger stations and engine terminals. Water towers, coaling towers and diesel stands show up too once you zoom in. Next to each icon, a small tag counts the passengers waiting (blue), the cars spotted there and, in amber, the cars on the way. When icons would overlap, the busiest places are kept.
 
-Hover an icon for its type and town, its contract tier, what it ships and receives, the cars on each of its tracks, the passengers waiting by destination, when the station was last served, and any storage warnings; a fuel stop shows its stock and the industry that supplies it. Click an icon to open the place in **Company > Locations** (a fuel stop opens its supplier).
+Hover an icon for its type and town, its contract tier, what it ships and receives, the cars on each of its tracks, the passengers waiting by destination, when the station was last served, and any storage warnings; a fuel stop shows its stock and the industry that supplies it. While you hover it, its cars are outlined on the map, amber on the way and green spotted. Click an icon to open the place in **Company > Locations** (a fuel stop opens its supplier).
 
 **Display > Place Types** picks which types show; **Show all** brings them all back.
 
@@ -62,6 +62,10 @@ Select a locomotive, from the map, the world or the Trains list:
 - **Train Orders**: if the train runs Train Orders, every order with a place (moves, couplings, stations, refuels, turntables) shows as a numbered amber marker, the current one larger. Hover one to read the orders there.
 - **Route preview**: see below.
 
+### Highlighted tracks
+
+Whatever the game lights up on the track shows on the map too: hover a car's waybill tag or a destination in the game and those tracks glow and pulse in yellow on the map, so you can find them at a glance; hover a turntable track in Goto's menu or a construction stake and it glows as well. Train Orders' preview of the train after an order (hover an order) and the game's waypoint picker footprint are drawn on the map in their own color.
+
 ### Find
 
 Type in the **Find** box at the left of the toolbar and press Enter: a car's mark and number, a locomotive, an industry, a station, a fuel stop or a town. With one match the map flies there and a gold pulse marks the spot; with several, pick one from the list. Picking a locomotive also makes it the one Follow follows.
@@ -72,6 +76,8 @@ Right-click any track on the map for a menu, the game's own kind:
 
 - **Send <locomotive> here**: the selected locomotive's engineer gets a waypoint there, at its current speed limit, the same as picking the waypoint yourself, and a cyan pulse marks the spot. If there's no route, the pulse is red and the game's own message tells you why. Any handbrakes set in the train are released, and the message says how many. Greyed out until you select a locomotive.
 - **Place fusee** or, near one, **Extinguish fusee**: the engineer of any train stops at a lit fusee, as with the game's own fusees. Greyed out when your role can't place them.
+
+Right-click a car for **Couple <locomotive> to <car>**: the selected locomotive's engineer drives to the nearest free end of that car's cut and couples, the same as picking the car with the game's waypoint tool. Once coupled and stopped, the air is connected and the handbrakes released, and a message says how many cars it took. Greyed out until you select a locomotive, and for cars already in its train. The web map has the same item on its right-click menu. With the Train Orders window open, the coupling is added to the orders instead.
 
 If you're already picking a waypoint the game's way, right-click works as before.
 
@@ -96,7 +102,7 @@ Track Class and the game's **Track Condition** take turns: turning one on turns 
 
 ### Route preview
 
-Select a locomotive in Waypoint mode and open the map: the route its engineer is about to take is drawn on the track, with cyan stripes flowing toward a flag with the locomotive's name at the waypoint. It's the engineer's own route, every switch and reversal included, and the part the train has already covered is left out. It disappears when the train arrives.
+Select a locomotive in Waypoint mode and open the map: the route its engineer is about to take is drawn on the track, with cyan stripes flowing smoothly toward a flag with the locomotive's name at the waypoint. It's the engineer's own route, every switch and reversal included, and the part the train has already covered is left out. It disappears when the train arrives.
 
 ### Signals
 
@@ -145,16 +151,20 @@ The first time, the web map reads the game's terrain for a few seconds (the stat
 
 - **Painted terrain**: hills, valleys, rivers, forests and fields from the game's own terrain data, painted in detail: rivers along the game's own river paths with deep water and muddy shores, forests of broadleaf and conifer trees with their shadows, rock on steep slopes, relief shading and clearings along the track. The land beyond the railroad is filled in too, so the map is whole from edge to edge. Close up it paints in over a few seconds.
 - **Every train and car, moving live**, even during the game's fast forward. Cars take their destination colors and show their numbers when you zoom in; close up you see the rails and ties. Far out, each train is a marker you can't miss. Moving trains leave a fading trail and light the way ahead.
-- **Tracks** in their colors, with tunnels, which way each switch is set, and wooden and steel bridges with their decks, trestles and railings up close. Hover a track for its name (industry tracks and stations), class, speed limit, condition, the class it's built for and the grade.
+- **Tracks** in their colors, with the names the game's map puts on passing tracks (Cowee, Barkers, Thomas Valley…), tunnels, which way each switch is set, and wooden and steel bridges with their decks, trestles and railings up close. Hover a track for its name (industry tracks and stations), class, speed limit, condition, the class it's built for and the grade.
 - **Places**: every industry, station, interchange and fuel stop gets an icon by type, with how many cars are spotted there and on the way, and how many passengers wait at stations. Hover one for its stock, contract and tracks.
 - **Fusees** pulse on the track. Right-click a track for a menu to place a fusee there or put one out.
 - **Click a train** for a panel with everything about it: speed, the engineer's mode and waypoint, alerts, every locomotive's fuel, tractive effort, boiler and controls, and every car's load and destination. If the train runs Train Orders, its orders are listed too. **Follow** keeps it in view. The selection follows the game: selecting a train in the game selects it here, and selecting it here selects it in the game.
 - **Click a place** for its panel: what it ships and receives, its storage, contract, the cars on its tracks right now and the ones on the way, which light up across the map. Fuel stops show their stock and supplier.
 - **Search** (`/`) for trains, towns, places and cars, and the map flies there.
-- **Toolbar** on the right: zoom, the whole map, a list of every train (`T`), layers (`L`) to turn the terrain, track class, places by type, signals, car numbers and alerts on or off, and full screen. `Esc` closes things, `F` follows the selected train.
+- **Teleport**: Ctrl+click anywhere on the map, right-click > **Teleport here** (or **Teleport to** a car), or the **Teleport** button of a train or place panel moves your camera there, like Ctrl+T on the game's map.
+- **Train Orders** (with Train Orders 1.8.0 or later): select a train and click **Orders** next to Follow, the toolbar's orders button or press `O`: a panel on the right shows its orders, in sync with the game, with every button of the orders window (Add menus, order settings, Start, Skip, Clear, Copy, Paste, saved jobs). Hover an order to see the train after it on the map. Its orders also show on the map as numbered markers.
+- **Right-click** a track for **Send <train> here**, a fusee or **Teleport here**, and a car for **Couple <train> to <car>** or **Teleport to** it. While the orders panel is open, Send here and Couple are added to the train's orders, as in the game with the Train Orders window open.
+- **Highlighted tracks**: what the game lights up (a hovered waybill destination, a turntable track in Goto's menu) glows on the web map too, with an arrow at the edge of the screen when it's off screen; click the arrow to fly there.
+- **Toolbar** beside the search box: zoom, the whole map, a list of every train (`T`), layers (`L`) to turn the terrain, track class, track condition, industry tracks, mainline, track names, speed limits, places by type, the train's route, destinations and orders, signals, fusees, cars, car numbers and alerts on or off, and full screen. `Esc` closes things, `F` follows the selected train, `O` opens the orders.
 - **Windows on their own**: by default every window selects the train you select in the game, and the other way round. The link button (`G`) gives a window its own selection, so one can follow a train in the background or stay on the whole map while you play; each window remembers its own view.
 
-The web map works on the same computer as the game. Besides showing it, it can only select trains and place or put out fusees.
+The web map works on the same computer as the game. Besides showing it, it can select trains, send them, couple them, edit their Train Orders, place or put out fusees and teleport your camera. When you update the mod with the page open, it reloads itself.
 
 ### Web map only
 
@@ -174,6 +184,19 @@ Once a session, when a game loads, the mod asks Nexus Mods whether the QbanRambo
 Disable **Map Plus** in **Mods**, or delete its folder from `Documents\Railroader\Mods`, and restart the game. It doesn't change your saves.
 
 ## Changelog
+
+### 1.7.0
+
+- **Train Orders on the web map**: with Train Orders 1.8.0, the whole orders window in a panel on the right, in sync with the game: Add menus, order settings, Start, Skip, Clear, Copy, Paste and saved jobs; hover an order to see the train after it, and the orders show as numbered markers on the map.
+- **Send, couple and teleport from the web map**: right-click a track for Send <train> here or Teleport here, a car for Couple <train> to <car> or Teleport to it; **Ctrl+click** anywhere teleports straight there; train and place panels have a Teleport button. With the orders panel open, Send here and Couple are added to the orders.
+- **Couple to a car from the game's map**: right-click a car for Couple <locomotive> to <car>; air connected and handbrakes released once coupled.
+- **Highlighted tracks on both maps**: what the game lights up on the track (a waybill destination you hover, a turntable track in Goto's menu, a construction stake) glows and pulses on the maps; Train Orders' preview of the train after an order and the game's waypoint picker footprint show on them too.
+- **More on the web map**: the game's track condition stripes, the selected train's destination tracks, the names of passing tracks (Cowee, Barkers, Thomas Valley…), speed limit numbers, and layer switches for the route, destinations, orders, industry tracks, mainline and cars; the toolbar sits beside the search box.
+- **The game's map**: a click on a car opens its Inspect window and keeps your selected train, Shift-click selects, as on the game's own map; **Click selects the train** in Preferences > Mods brings the old click back. Hovering a place outlines its cars, amber on the way and green spotted.
+- **Passengers**: passenger cars show their passengers against their seats ("35/60 passengers") and the train symbol from your timetable ("Train 1 W") instead of Empty and No waybill; the train panel and a locomotive's hover show the whole train's passengers and how many go to each station.
+- **Smoother route**: the route's stripes flow without jumps, and a route that passes back near the train is no longer drawn shorter than it is.
+- **Settings in Preferences > Mods** have a cleaner layout: each checkbox first, with its full name beside it.
+- Fixed: town names no longer hide under place icons on the web map, rivers that load late now show up, the page reloads itself after an update, and closing or reloading the page no longer writes errors to the Message Log.
 
 ### 1.6.0
 

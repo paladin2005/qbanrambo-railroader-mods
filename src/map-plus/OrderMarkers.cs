@@ -161,7 +161,7 @@ internal sealed class OrderMarkers : MonoBehaviour
     return result;
   }
 
-  private static Vector3? PositionOf(Value step, Graph graph)
+  internal static Vector3? PositionOf(Value step, Graph graph)
   {
     try
     {

@@ -37,6 +37,7 @@ public sealed class MapPlusMod : IModEntryPoint, IWorldLifecycle
     MapPlusConfig.Load();
     MapEnabled = MapPlusConfig.MapInGame;
     _harmony = new Harmony(context.ModIdentifier);
+    SpanHighlights.Patch(_harmony, context.Log);
     if (MapEnabled) AddToMap();
     else Log.Info($"Map Plus leaves the game's map alone (EnableMapInGame=0 in {MapPlusConfig.FilePath}); only the web map runs");
     WebMap.Start(context.ModDirectory);
@@ -106,15 +107,20 @@ public sealed class MapPlusMod : IModEntryPoint, IWorldLifecycle
     _host.AddComponent<OrderMarkers>();
     _host.AddComponent<ScaleBar>();
     _host.AddComponent<SelectionHalo>();
+    _host.AddComponent<HighlightOverlay>();
+    _host.AddComponent<PathOverlay>();
   }
 
   public void OnWorldUnload()
   {
     WebTerrain.WorldChanged();
     WebRivers.Reset();
+    WebLabels.Reset();
     PlaceData.Reset();
     WebTrackInfo.Reset();
     WebTrain.Reset();
+    SpanHighlights.Reset();
+    MapCoupleWatch.Clear();
     if (_host == null) return;
     UnityEngine.Object.Destroy(_host);
     _host = null;

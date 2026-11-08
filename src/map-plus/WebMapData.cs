@@ -18,6 +18,7 @@ internal static class WebMapData
   private const float SignalListSeconds = 5f;
   private const float FuseeReach = 8f;
   private const string NoGame = "Load a game to see the map";
+  private const float ExtrasCheckSeconds = 10f;
 
   private static readonly List<(CTCSignal Signal, Vector3 Position, Vector2 Direction)> Signals = new();
   private static readonly List<TrackNode> Switches = new();
@@ -25,6 +26,11 @@ internal static class WebMapData
   private static int _trackVersion = -1;
   private static byte[] _track;
   private static float _signalsAt = float.MinValue;
+  private static int _salt;
+  private static bool _extrasMissing;
+  private static float _extrasCheckAt;
+  private static int _riverObjects;
+  private static int _labelObjects;
 
   internal static Dictionary<TrackSegment, int> SegmentIndex { get; private set; } = new();
   internal static int BuiltVersion => _trackVersion;
@@ -42,7 +48,23 @@ internal static class WebMapData
       SegmentIndex = new Dictionary<TrackSegment, int>();
       return;
     }
-    _version = TrackVersion();
+    CheckExtras();
+    unchecked
+    {
+      _version = TrackVersion() + _salt * 7919;
+    }
+  }
+
+  private static void CheckExtras()
+  {
+    if (!_extrasMissing || _track == null || Time.unscaledTime < _extrasCheckAt) return;
+    _extrasCheckAt = Time.unscaledTime + ExtrasCheckSeconds;
+    var rivers = UnityEngine.Object.FindObjectsByType<Map.Runtime.MaskComponents.RiverPath>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length;
+    var labels = UnityEngine.Object.FindObjectsByType<UI.Map.MapLabel>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length;
+    if (rivers == _riverObjects && labels == _labelObjects) return;
+    WebRivers.Reset();
+    WebLabels.Reset();
+    _salt++;
   }
 
   internal static byte[] Track()
@@ -91,7 +113,12 @@ internal static class WebMapData
     }).ToList();
     var bounds = minX <= maxX ? new[] { R(minX), R(minZ), R(maxX), R(maxZ) } : null;
     var rivers = WebRivers.Paths();
-    _track = Json(new { ok = true, version = _version, bounds, segments, switches, towns, rivers });
+    var labels = WebLabels.All();
+    _riverObjects = UnityEngine.Object.FindObjectsByType<Map.Runtime.MaskComponents.RiverPath>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length;
+    _labelObjects = UnityEngine.Object.FindObjectsByType<UI.Map.MapLabel>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length;
+    _extrasMissing = rivers.Count == 0 || labels.Count == 0;
+    _extrasCheckAt = Time.unscaledTime + ExtrasCheckSeconds;
+    _track = Json(new { ok = true, version = _version, bounds, segments, switches, towns, rivers, labels });
     _trackVersion = _version;
     return _track;
   }
@@ -107,12 +134,7 @@ internal static class WebMapData
         Fusees.Remove(key);
         return Json(new { ok = true, text = "Fusee put out" });
       }
-      var parts = (point ?? "").Split(',');
-      if (parts.Length != 2 || !float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var x) || !float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var z)) return Json(new { ok = false, text = "No track there" });
-      var terrain = Map.Runtime.MapManager.Instance;
-      var game = new Vector3(x, 0f, z);
-      if (terrain != null && terrain.TryFindTerrainPointForXZ(game, out var ground)) game = ground;
-      if (!Graph.Shared.TryGetLocationFromGamePoint(game, FuseeReach, out var location)) return Json(new { ok = false, text = "No track there" });
+      if (!TryLocation(point, out var location)) return Json(new { ok = false, text = "No track there" });
       if (action == "remove")
       {
         if (!Fusees.TryNear(location, out var near)) return Json(new { ok = false, text = "No fusee there" });
@@ -127,6 +149,144 @@ internal static class WebMapData
       MapPlusMod.Log?.Error(exception, "The web map couldn't place or put out a fusee");
       return Json(new { ok = false, text = "That didn't work. See the Message Log." });
     }
+  }
+
+  private const string OrdersHookKey = "qbanrambo.train-orders.web";
+
+  private static readonly string[] OrdersInstalledKeys = { "qbanrambo.train-orders.window-open", "qbanrambo.train-orders.turntable" };
+
+  internal static int OrdersSupport => AppDomain.CurrentDomain.GetData(OrdersHookKey) is Func<string, string, string, string> ? 2 : OrdersInstalledKeys.Any(key => AppDomain.CurrentDomain.GetData(key) != null) ? 1 : 0;
+
+  internal static byte[] Orders(string trainId, string action, string args)
+  {
+    if (!InGame) return Json(new { ok = false, text = NoGame });
+    if (AppDomain.CurrentDomain.GetData(OrdersHookKey) is not Func<string, string, string, string> hook) return Json(new { ok = false, missing = true, text = "Train Orders isn't installed" });
+    try
+    {
+      var decoded = string.IsNullOrEmpty(args) ? null : Uri.UnescapeDataString(args);
+      if (action == "waypoint")
+      {
+        var point = string.IsNullOrEmpty(decoded) ? null : Newtonsoft.Json.Linq.JObject.Parse(decoded)["point"]?.ToString();
+        if (!TryLocation(point, out var location)) return Json(new { ok = false, text = "No track there" });
+        decoded = JsonConvert.SerializeObject(new { location = Graph.LocationToString(location) });
+      }
+      return Encoding.UTF8.GetBytes(hook(trainId, string.IsNullOrEmpty(action) ? "view" : action, decoded));
+    }
+    catch (Exception exception)
+    {
+      MapPlusMod.Log?.Error(exception, "The web map couldn't reach Train Orders");
+      return Json(new { ok = false, text = "That didn't work. See the Message Log." });
+    }
+  }
+
+  internal static byte[] Send(string trainId, string point)
+  {
+    if (!InGame) return Json(new { ok = false, text = NoGame });
+    try
+    {
+      if (string.IsNullOrEmpty(trainId) || !TrainController.Shared.TryGetCarForId(trainId, out var car) || car is not BaseLocomotive locomotive) return Json(new { ok = false, text = "Select a train first" });
+      if (!TryLocation(point, out var location)) return Json(new { ok = false, text = "No track there" });
+      var text = MapWaypoints.SendTo(locomotive, location, out var sent);
+      return Json(new { ok = sent, text });
+    }
+    catch (Exception exception)
+    {
+      MapPlusMod.Log?.Error(exception, "The web map couldn't send the train");
+      return Json(new { ok = false, text = "That didn't work. See the Message Log." });
+    }
+  }
+
+  internal static byte[] Couple(string trainId, string carId, bool queue)
+  {
+    if (!InGame) return Json(new { ok = false, text = NoGame });
+    try
+    {
+      if (string.IsNullOrEmpty(trainId) || !TrainController.Shared.TryGetCarForId(trainId, out var train) || train is not BaseLocomotive locomotive) return Json(new { ok = false, text = "Select a train first" });
+      if (string.IsNullOrEmpty(carId) || !TrainController.Shared.TryGetCarForId(carId, out var car)) return Json(new { ok = false, text = "That car isn't there anymore" });
+      var text = MapCoupling.CoupleTo(locomotive, car, out var sent, queue);
+      return Json(new { ok = sent, text });
+    }
+    catch (Exception exception)
+    {
+      MapPlusMod.Log?.Error(exception, "The web map couldn't couple the train");
+      return Json(new { ok = false, text = "That didn't work. See the Message Log." });
+    }
+  }
+
+  internal static byte[] Teleport(string point, string carId)
+  {
+    if (!InGame) return Json(new { ok = false, text = NoGame });
+    try
+    {
+      var camera = CameraSelector.shared;
+      if (camera == null) return Json(new { ok = false, text = "The camera isn't ready" });
+      Vector3 target;
+      string where;
+      if (!string.IsNullOrEmpty(carId))
+      {
+        if (!TrainController.Shared.TryGetCarForId(carId, out var car)) return Json(new { ok = false, text = "That car isn't there anymore" });
+        target = car.GetCenterPosition();
+        where = car.DisplayName;
+      }
+      else
+      {
+        if (!TryPoint(point, out target)) return Json(new { ok = false, text = "No point there" });
+        var terrain = Map.Runtime.MapManager.Instance;
+        if (terrain == null || !terrain.TryFindTerrainPointForXZ(target, out var ground)) return Json(new { ok = false, text = "No ground there" });
+        target = ground;
+        where = null;
+      }
+      camera.JumpToPoint(target, Quaternion.identity);
+      return Json(new { ok = true, text = where != null ? $"Teleported to {where}" : "Teleported" });
+    }
+    catch (Exception exception)
+    {
+      MapPlusMod.Log?.Error(exception, "The web map couldn't teleport");
+      return Json(new { ok = false, text = "That didn't work. See the Message Log." });
+    }
+  }
+
+  private static bool TryPoint(string point, out Vector3 game)
+  {
+    game = default;
+    var parts = (point ?? "").Split(',');
+    if (parts.Length != 2 || !float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var x) || !float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var z)) return false;
+    game = new Vector3(x, 0f, z);
+    return true;
+  }
+
+  private static bool TryLocation(string point, out Location location)
+  {
+    location = default;
+    var parts = (point ?? "").Split(',');
+    if (parts.Length != 2 || !float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var x) || !float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var z)) return false;
+    var terrain = Map.Runtime.MapManager.Instance;
+    var game = new Vector3(x, 0f, z);
+    if (terrain != null && terrain.TryFindTerrainPointForXZ(game, out var ground)) game = ground;
+    return Graph.Shared.TryGetLocationFromGamePoint(game, FuseeReach, out location);
+  }
+
+  private static object GamePaths()
+  {
+    if (!SpanHighlights.PathsActive) return null;
+    return SpanHighlights.Paths
+      .Where(path => path.Points.Count >= 2)
+      .Select(path => new { c = Hex(path.Tint), p = path.Points.SelectMany(point => new[] { R(point.x), R(point.z) }).ToList() })
+      .ToList();
+  }
+
+  private static object Highlight()
+  {
+    if (!SpanHighlights.Active) return null;
+    var lit = SpanHighlights.Segments;
+    if (lit.Count == 0) return null;
+    var segments = new HashSet<int>();
+    foreach (var segment in lit)
+    {
+      if (SegmentIndex.TryGetValue(segment, out var index)) segments.Add(index);
+    }
+    var center = SpanHighlights.Center(lit);
+    return new { v = SpanHighlights.Version, s = segments.OrderBy(index => index).ToList(), c = Hex(SpanHighlights.HighlightColor), x = R(center.x), z = R(center.z) };
   }
 
   internal static byte[] Select(string id)
@@ -210,7 +370,7 @@ internal static class WebMapData
     if (chosen is BaseLocomotive chosenLocomotive) sel = chosenLocomotive.id;
     else if (chosen != null && groups.TryGetValue(chosen, out var chosenGroup)) sel = chosenGroup;
     var fl = Fusees.All().Select(fusee => new object[] { R(fusee.Position.x), R(fusee.Position.z), fusee.Key }).ToList();
-    return Json(new { ok = true, version = _version, cars, locos, signals, sw = thrown.ToString(), sv = _trackVersion, sel, fl });
+    return Json(new { ok = true, version = _version, cars, locos, signals, sw = thrown.ToString(), sv = _trackVersion, sel, fl, hl = Highlight(), gp = GamePaths(), to = OrdersSupport, pv = WebMap.PageVersion });
   }
 
   internal static byte[] Routes()

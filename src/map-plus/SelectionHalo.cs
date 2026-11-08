@@ -16,6 +16,8 @@ internal sealed class SelectionHalo : MonoBehaviour
   private const string BadgeName = "Map Plus Alert";
 
   private static readonly Color OutlineColor = new(0.3f, 0.85f, 1f, 1f);
+  private static readonly Color ComingColor = new(1f, 0.72f, 0.15f, 1f);
+  private static readonly Color SpottedColor = new(0.48f, 0.9f, 0.48f, 1f);
 
   private readonly Dictionary<Car, Image> _outlines = new();
   private float _nextRefresh;
@@ -37,19 +39,32 @@ internal sealed class SelectionHalo : MonoBehaviour
     try
     {
       var selected = TrainController.Shared?.SelectedCar;
-      var wanted = selected != null && !selected.IsInBardo ? new HashSet<Car>(Consist.Of(selected).Where(car => car != null)) : new HashSet<Car>();
+      var wanted = new Dictionary<Car, Color>();
+      if (selected != null && !selected.IsInBardo)
+      {
+        foreach (var car in Consist.Of(selected).Where(car => car != null)) wanted[car] = OutlineColor;
+      }
+      if (PlaceIcons.Hovered is { } place)
+      {
+        foreach (var car in place.ComingCars.Where(car => car != null && !car.IsInBardo)) wanted[car] = ComingColor;
+        foreach (var car in place.SpottedCars.Where(car => car != null && !car.IsInBardo)) wanted[car] = SpottedColor;
+      }
       foreach (var car in _outlines.Keys.ToList())
       {
         var outline = _outlines[car];
-        if (car != null && wanted.Contains(car) && outline != null) continue;
+        if (car != null && wanted.ContainsKey(car) && outline != null) continue;
         if (outline != null) Destroy(outline.gameObject);
         _outlines.Remove(car);
       }
-      foreach (var car in wanted)
+      foreach (var entry in wanted)
       {
-        if (_outlines.ContainsKey(car)) continue;
-        var outline = CreateOutline(car);
-        if (outline != null) _outlines[car] = outline;
+        if (!_outlines.TryGetValue(entry.Key, out var outline))
+        {
+          outline = CreateOutline(entry.Key);
+          if (outline == null) continue;
+          _outlines[entry.Key] = outline;
+        }
+        if (outline.color != entry.Value) outline.color = entry.Value;
       }
     }
     catch (Exception exception)

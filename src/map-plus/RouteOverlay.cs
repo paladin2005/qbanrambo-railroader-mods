@@ -28,6 +28,7 @@ internal sealed class RouteOverlay : MonoBehaviour
   private const float FlagFraction = 0.07f;
   private const float ScrollPerSecond = 1.5f;
   private const float TrimSearch = 400f;
+  private const float TrimSlack = 25f;
   private const int FlagPixels = 64;
   private const float LabelSize = 30f;
 
@@ -261,6 +262,7 @@ internal sealed class RouteOverlay : MonoBehaviour
     {
       if (i > 0) travelled += Vector3.Distance(points[i - 1], points[i]);
       var distance = Vector2.Distance(new Vector2(points[i].x, points[i].z), new Vector2(train.x, train.z));
+      if (distance > closestDistance + TrimSlack) break;
       if (distance >= closestDistance) continue;
       closestDistance = distance;
       closest = i;
@@ -379,7 +381,9 @@ internal sealed class RouteLine : MaskableGraphic
     if (_points.Count < 2) return;
     var half = _width / 2f;
     var period = _width * PeriodPerWidth;
-    var along = 0f;
+    var total = 0f;
+    for (var i = 1; i < _points.Count; i++) total += (Flat(_points[i]) - Flat(_points[i - 1])).magnitude;
+    var along = -total;
     var lastNormal = Vector2.up;
     for (var i = 0; i < _points.Count; i++)
     {

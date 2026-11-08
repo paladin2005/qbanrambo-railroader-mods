@@ -11,6 +11,9 @@ namespace QbanRambo.TrainOrders;
 
 internal static class OrderActions
 {
+  private const int SpeedStep = 5;
+  private static readonly int[] GoBackTimes = { 1, 2, 3, 4, 5, 10, 15, 20 };
+
   internal const int MaxCut = 10;
 
   private static readonly int[] WaitHourOptions = { 1, 2, 4, 6, 8, 10, 12 };
@@ -52,6 +55,8 @@ internal static class OrderActions
       StepKind.CoupleBack => "Couple back to the cars it left",
       StepKind.CoupleTo => "Couple to the cars left by an earlier order",
       StepKind.RunAround => step.Side == CutSide.Rear ? "Run around the cars behind" : "Run around the cars in front",
+      StepKind.SetSpeed => step.Count < 0 ? "Set speed to max" : $"Set speed {step.Count} mph",
+      StepKind.GoBack => $"Go back to an earlier order{GoBackCondition(step)}",
       _ => "Unknown order"
     };
   }
@@ -62,6 +67,12 @@ internal static class OrderActions
     {
       var source = orders.IndexOfId(step.From);
       return source < 0 ? "Couple to cars left by a removed order" : $"Couple to the cars left by order {source + 1}";
+    }
+    if (step.Kind == StepKind.GoBack)
+    {
+      var target = orders.IndexOfId(step.From);
+      var laps = step.Times.HasValue && step.Laps.HasValue ? $" ({step.Laps.Value} left)" : "";
+      return target < 0 ? "Go back to a removed order" : $"Go back to order {target + 1}{GoBackCondition(step)}{laps}";
     }
     if (step.Kind != StepKind.Turntable) return Describe(step);
     var name = Turntables.Find(step.TurntableId)?.Name;
@@ -76,6 +87,19 @@ internal static class OrderActions
     var track = site?.Tracks.FirstOrDefault(candidate => candidate.Index == step.Exit.Value);
     if (track == null) return $"Use the {name}";
     return track.Stall ? $"Park on {track.Label} at the {name}" : $"Leave the {name} on {track.Label}";
+  }
+
+  internal static IReadOnlyList<MenuItem> SpeedItems(Car locomotive)
+  {
+    var limit = Track.TrackSegment.RailroadSpeedLimitMph;
+    var items = new List<MenuItem>();
+    for (var mph = SpeedStep; mph < limit; mph += SpeedStep)
+    {
+      var speed = mph;
+      items.Add(MenuItem.Action($"{speed} mph", () => Run(() => Edit(locomotive, orders => orders.Add(OrderStep.SetSpeed(speed)))), "This order and the trips after it"));
+    }
+    items.Add(MenuItem.Action($"Max ({limit} mph)", () => Run(() => Edit(locomotive, orders => orders.Add(OrderStep.SetSpeed(OrderStep.MaxSpeed)))), "The railroad's speed limit, for this order and the trips after it"));
+    return items;
   }
 
   internal static IReadOnlyList<MenuItem> TurntableItems(BaseLocomotive locomotive)
@@ -239,16 +263,25 @@ internal static class OrderActions
 
   internal static List<(int Count, string Label)> TakeOptions()
   {
-    var options = new List<(int Count, string Label)> { (Maneuvers.AllCars, "All cars") };
-    options.AddRange(Enumerable.Range(1, MaxCut).Select(count => (count, count == 1 ? "1 car" : $"{count} cars")));
+    var options = new List<(int Count, string Label)> { (Maneuvers.AllCars, "Take all") };
+    options.AddRange(Enumerable.Range(1, MaxCut).Select(count => (count, $"Take {count}")));
+    options.Add((LeaveValue(0), "Take none"));
+    options.Add((LeaveValue(OrderStep.LeaveAll), "Leave all"));
+    options.AddRange(Enumerable.Range(1, MaxCut).Select(count => (LeaveValue(count), $"Leave {count}")));
     return options;
   }
 
-  internal static void SetTake(Car locomotive, int index, int count)
+  internal static int TakeValue(OrderStep step) => step.Leave.HasValue ? LeaveValue(step.Leave.Value) : step.Count;
+
+  private static int LeaveValue(int leave) => -(leave + 1);
+
+  internal static void SetTake(Car locomotive, int index, int value)
   {
     Edit(locomotive, orders =>
     {
-      if (index >= 0 && index < orders.Steps.Count) orders.Steps[index] = orders.Steps[index].WithTake(count);
+      if (index < 0 || index >= orders.Steps.Count) return;
+      var step = orders.Steps[index];
+      orders.Steps[index] = value < 0 ? step.WithLeave(-value - 1) : step.WithTake(value);
     });
   }
 
@@ -305,7 +338,48 @@ internal static class OrderActions
   {
     Edit(locomotive, orders =>
     {
-      if (index >= 0 && index < orders.Steps.Count && orders.Steps[index].Kind == StepKind.WaitTime) orders.Steps[index] = orders.Steps[index].WithTime(minuteOfDay);
+      if (index < 0 || index >= orders.Steps.Count) return;
+      var step = orders.Steps[index];
+      if (step.Kind == StepKind.WaitTime) orders.Steps[index] = step.WithTime(minuteOfDay);
+      else if (step.Kind == StepKind.GoBack) orders.Steps[index] = step.WithGoBackTime(minuteOfDay);
+    });
+  }
+
+  internal static bool HasTime(OrderStep step) => step.Kind == StepKind.WaitTime || (step.Kind == StepKind.GoBack && !step.Times.HasValue);
+
+  private static string GoBackCondition(OrderStep step) => step.Times.HasValue ? $", {(step.Times.Value == 1 ? "once" : $"{step.Times.Value} times")}" : $" until {ClockMinute(step.Count)}";
+
+  internal static IReadOnlyList<MenuItem> GoBackItems(Car locomotive)
+  {
+    var orders = OrderList.Read(locomotive);
+    if (orders.Steps.Count == 0) return new[] { MenuItem.Action("Add some orders first", null, "Go back repeats orders already in the list", disabled: true) };
+    return orders.Steps
+      .Select((step, index) => MenuItem.Submenu($"{index + 1}. {RowText(step, orders)}", () => GoBackChoices(locomotive, index)))
+      .ToList();
+  }
+
+  private static IReadOnlyList<MenuItem> GoBackChoices(Car locomotive, int index)
+  {
+    var items = new List<MenuItem>
+    {
+      MenuItem.Action("Until a time", () => Run(() => AddGoBack(locomotive, index, id => OrderStep.GoBackUntil(id, NextHour()))), "Go back until that time, then go on; pick the time on the order")
+    };
+    items.Add(MenuItem.Submenu("Times", () => GoBackTimes.Select(times => MenuItem.Action(times == 1 ? "Once" : $"{times} times", () => Run(() => AddGoBack(locomotive, index, id => OrderStep.GoBackTimes(id, times))))).ToList()));
+    return items;
+  }
+
+  private static void AddGoBack(Car locomotive, int index, Func<string, OrderStep> create)
+  {
+    Edit(locomotive, orders =>
+    {
+      if (index < 0 || index >= orders.Steps.Count) return;
+      var id = orders.Steps[index].Id;
+      if (id == null)
+      {
+        id = OrderStep.NewId();
+        orders.Steps[index] = orders.Steps[index].WithId(id);
+      }
+      orders.Add(create(id));
     });
   }
 

@@ -28,6 +28,7 @@ internal sealed class Dispatcher : MonoBehaviour
   private const float ArrivalTolerance = 15f;
   private const float MovingSpeed = 0.5f;
   private const double LoadStallGameSeconds = 2 * 60 * 60;
+  private const int GoBackHorizonMinutes = 12 * 60;
   private const float LoadProgressEpsilon = 0.001f;
   private const string AlreadyPositioned = "Already positioned at waypoint.";
 
@@ -164,7 +165,7 @@ internal sealed class Dispatcher : MonoBehaviour
         {
           Maneuvers.ConnectAir(locomotive);
           Maneuvers.ReleaseHandbrakes(locomotive);
-          if ((step.Kind == StepKind.PickUp || (step.IsCouple && step.Count != Maneuvers.AllCars)) && TryGetCar(runner.CoupleCarId, out var picked))
+          if ((step.Kind == StepKind.PickUp || (step.IsCouple && (step.Count != Maneuvers.AllCars || step.Leave.HasValue))) && TryGetCar(runner.CoupleCarId, out var picked))
           {
             Trim(locomotive, orders, step, runner, picked);
             return;
@@ -239,6 +240,11 @@ internal sealed class Dispatcher : MonoBehaviour
 
   private static void Trim(BaseLocomotive locomotive, OrderList orders, OrderStep step, Runner runner, Car target)
   {
+    if (step.Leave.HasValue)
+    {
+      LeaveOwn(locomotive, orders, step, runner, target, step.Leave.Value);
+      return;
+    }
     var group = Pickups.GroupFrom(locomotive, target);
     if (step.Count == Maneuvers.AllCars || group.Count <= step.Count)
     {
@@ -248,6 +254,37 @@ internal sealed class Dispatcher : MonoBehaviour
     var cars = locomotive.EnumerateCoupled(Car.LogicalEnd.A).ToList();
     var towardB = cars.IndexOf(target) > cars.IndexOf(locomotive);
     var plan = new Maneuvers.CutPlan(group[step.Count - 1], group[step.Count], towardB);
+    orders.NoteLeft(step, plan.CutCar.id);
+    orders.Write(locomotive);
+    Maneuvers.ExecuteCut(plan);
+    runner.CutCar = plan.CutCar;
+    runner.CutStarted = Time.time;
+    runner.Phase = Phase.Cutting;
+  }
+
+  private static void LeaveOwn(BaseLocomotive locomotive, OrderList orders, OrderStep step, Runner runner, Car target, int leave)
+  {
+    var cars = locomotive.EnumerateCoupled(Car.LogicalEnd.A).ToList();
+    var targetIndex = cars.IndexOf(target);
+    var locomotiveIndex = cars.IndexOf(locomotive);
+    if (targetIndex < 0 || locomotiveIndex < 0)
+    {
+      Complete(locomotive, orders);
+      return;
+    }
+    var towardB = targetIndex > locomotiveIndex;
+    var inward = new List<Car>();
+    for (var i = towardB ? targetIndex - 1 : targetIndex + 1; towardB ? i >= locomotiveIndex : i <= locomotiveIndex; i += towardB ? -1 : 1) inward.Add(cars[i]);
+    var own = inward.TakeWhile(Maneuvers.IsCar).Take(leave).ToList();
+    if (leave == OrderStep.LeaveAll && own.Count > 0) leave = own.Count;
+    if (own.Count < leave || inward.Count <= leave)
+    {
+      Pause(locomotive, orders, own.Count == 0 ? "No cars of the train to leave next to the coupling" : $"Only {(own.Count == 1 ? "1 car" : $"{own.Count} cars")} of the train to leave next to the coupling");
+      return;
+    }
+    var cut = leave == 0 ? target : own[leave - 1];
+    var kept = inward[leave];
+    var plan = new Maneuvers.CutPlan(kept, cut, towardB);
     orders.NoteLeft(step, plan.CutCar.id);
     orders.Write(locomotive);
     Maneuvers.ExecuteCut(plan);
@@ -589,8 +626,70 @@ internal sealed class Dispatcher : MonoBehaviour
       case StepKind.RunAround:
         StartRunAround(locomotive, orders, step, runner);
         break;
+      case StepKind.SetSpeed:
+        StartSetSpeed(locomotive, orders, step);
+        break;
+      case StepKind.GoBack:
+        StartGoBack(locomotive, orders, step);
+        break;
     }
   }
+
+  private static void StartGoBack(BaseLocomotive locomotive, OrderList orders, OrderStep step)
+  {
+    var target = orders.IndexOfId(step.From);
+    if (target < 0 || target >= orders.Current)
+    {
+      Pause(locomotive, orders, "The order to go back to is gone");
+      return;
+    }
+    if (step.Times.HasValue)
+    {
+      var laps = step.Laps ?? step.Times.Value;
+      if (laps <= 0)
+      {
+        Complete(locomotive, orders);
+        return;
+      }
+      orders.Steps[orders.Current] = step.WithLaps(laps - 1);
+    }
+    else
+    {
+      var now = OrderStep.Minute(TimeWeather.Now);
+      var until = step.UntilMinute ?? step.UntilFrom(TimeWeather.Now);
+      if (now >= until || until - now > GoBackHorizonMinutes)
+      {
+        Complete(locomotive, orders);
+        return;
+      }
+      if (!step.UntilMinute.HasValue) orders.Steps[orders.Current] = step.WithUntil(until);
+    }
+    if (LapTooShort(locomotive))
+    {
+      Pause(locomotive, orders, "Nothing to repeat: the orders finish straight away");
+      return;
+    }
+    DropRunner(locomotive.id);
+    orders.JumpTo(target);
+    orders.Write(locomotive);
+    Toast.Present($"{locomotive.DisplayName}: back to order {target + 1}, {OrderActions.Describe(orders.Steps[target])}", ToastPosition.Bottom);
+  }
+
+  private static void StartSetSpeed(BaseLocomotive locomotive, OrderList orders, OrderStep step)
+  {
+    orders.Speed = step.Count;
+    var current = new AutoEngineerPersistence(locomotive.KeyValueObject).Orders;
+    if (current.Mode == AutoEngineerMode.Waypoint) Helper(locomotive).SetOrdersValue(maxSpeedMph: Mph(step.Count));
+    Complete(locomotive, orders);
+  }
+
+  internal static int? SpeedFor(Car locomotive)
+  {
+    var speed = OrderList.Read(locomotive).Speed;
+    return speed == 0 ? null : Mph(speed);
+  }
+
+  internal static int Mph(int speed) => speed < 0 ? TrackSegment.RailroadSpeedLimitMph : speed;
 
   private static void StartRunAround(BaseLocomotive locomotive, OrderList orders, OrderStep step, Runner runner)
   {
@@ -709,7 +808,7 @@ internal sealed class Dispatcher : MonoBehaviour
     OrderCapture.Dispatching = true;
     try
     {
-      Helper(locomotive).SetWaypointOrder(order);
+      Helper(locomotive).SetWaypointOrder(order, SpeedFor(locomotive));
     }
     finally
     {

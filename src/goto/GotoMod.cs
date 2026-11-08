@@ -32,6 +32,7 @@ public sealed class GotoMod : IModEntryPoint, IWorldLifecycle
     StationWatch.Clear();
     RefuelWatch.Clear();
     TurntableWatch.Clear();
+    TurntableHighlight.Clear();
     CoupleWatch.Clear();
     DeliverWatch.Clear();
     RunAroundWatch.Clear();
@@ -50,6 +51,7 @@ public sealed class GotoMod : IModEntryPoint, IWorldLifecycle
   {
     RefuelWatch.Drop();
     TurntableWatch.Clear();
+    TurntableHighlight.Clear();
     StationWatch.Clear();
     CoupleWatch.Clear();
     DeliverWatch.Clear();

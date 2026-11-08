@@ -3,7 +3,7 @@
   <PropertyGroup>
     <AssemblyName>QbanRambo.Goto</AssemblyName>
     <RootNamespace>QbanRambo.Goto</RootNamespace>
-    <Version>1.6.0</Version>
+    <Version>1.7.0</Version>
     <Product>QbanRambo's Goto</Product>
     <Authors>QbanRambo</Authors>
     <Company>QbanRambo</Company>
@@ -35,6 +35,7 @@
     <Reference Include="UnityEngine.UIModule" HintPath="$(RailroaderManaged)\UnityEngine.UIModule.dll" Private="false" />
     <Reference Include="UnityEngine.UI" HintPath="$(RailroaderManaged)\UnityEngine.UI.dll" Private="false" />
     <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(RailroaderManaged)\UnityEngine.TextRenderingModule.dll" Private="false" />
+    <Reference Include="Unity.TextMeshPro" HintPath="$(RailroaderManaged)\Unity.TextMeshPro.dll" Private="false" />
     <Reference Include="UnityEngine.UnityWebRequestModule" HintPath="$(RailroaderManaged)\UnityEngine.UnityWebRequestModule.dll" Private="false" />
     <Reference Include="Newtonsoft.Json" HintPath="$(RailroaderManaged)\Newtonsoft.Json.dll" Private="false" />
   </ItemGroup>

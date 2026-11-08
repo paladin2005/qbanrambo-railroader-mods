@@ -18,6 +18,7 @@ namespace QbanRambo.MapPlus;
 
 internal static class MapWaypoints
 {
+  private const string CapturedKey = "qbanrambo.train-orders.captured";
   private const float PickRadiusFactor = 0.05f;
   private const float PlaceRadius = 3f;
 
@@ -34,13 +35,29 @@ internal static class MapWaypoints
     try
     {
       var camera = MapBuilder.Shared?.mapCamera;
-      if (camera == null || !MapMouse.TryGetRay(drag, out var ray, out _) || !MapMouse.TryGetTrack(ray, camera.orthographicSize * PickRadiusFactor, out var location)) return;
+      if (camera == null || !MapMouse.TryGetRay(drag, out var ray, out _)) return;
+      var car = MapTooltips.CarAt(ray);
+      var onTrack = MapMouse.TryGetTrack(ray, camera.orthographicSize * PickRadiusFactor, out var location);
+      if (car == null && !onTrack) return;
       var canvas = drag.GetComponentInParent<Canvas>();
       var root = canvas != null ? canvas.rootCanvas : null;
       if (root == null) return;
-      var position = Graph.Shared.GetPosition(location);
       var items = new List<MenuItem>();
       var locomotive = TrainController.Shared?.SelectedLocomotive;
+      if (car != null)
+      {
+        var reason = MapCoupling.Unavailable(locomotive, car);
+        items.Add(reason == null
+          ? MenuItem.Action($"Couple {locomotive.DisplayName} to {car.DisplayName}", () => Safe(() => Couple(locomotive, car)), "The engineer couples to it, then air and handbrakes")
+          : MenuItem.Action($"Couple to {car.DisplayName}", null, reason, true));
+      }
+      if (!onTrack)
+      {
+        _menu?.Dismiss();
+        _menu = PopupMenu.PresentAt(root, screenPoint, items, MenuOwner);
+        return;
+      }
+      var position = Graph.Shared.GetPosition(location);
       items.Add(locomotive != null
         ? MenuItem.Action($"Send {locomotive.DisplayName} here", () => Safe(() => Send(locomotive, location)))
         : MenuItem.Action("Send a train here", null, "Select a locomotive first", true));
@@ -86,30 +103,52 @@ internal static class MapWaypoints
     }
   }
 
+  private static void Couple(BaseLocomotive locomotive, Car car)
+  {
+    var text = MapCoupling.CoupleTo(locomotive, car, out var sent);
+    MapPulse.Show(car.GetCenterPosition(), sent ? SentColor : RefusedColor);
+    Toast.Present(text, ToastPosition.Bottom);
+  }
+
   private static void Send(BaseLocomotive locomotive, Location location)
   {
     try
     {
       var position = Graph.Shared.GetPosition(location);
-      if (!CanReach(locomotive, location, out var failure))
-      {
-        MapPulse.Show(position, RefusedColor);
-        Toast.Present(failure ?? $"{locomotive.DisplayName} can't find a route there.", ToastPosition.Bottom);
-        return;
-      }
-      var orders = new AutoEngineerOrdersHelper(locomotive, new AutoEngineerPersistence(locomotive.KeyValueObject));
-      orders.SetWaypointOrder(new OrderWaypoint(Graph.LocationToString(location), null));
-      MapPulse.Show(position, SentColor);
-      var released = ReleaseHandbrakes(locomotive);
-      var place = TrackPainter.PlaceAt(position, PlaceRadius);
-      var handbrakes = released == 0 ? "" : $", released {released} {(released == 1 ? "handbrake" : "handbrakes")}";
-      Toast.Present($"{locomotive.DisplayName} heading to {place?.Name ?? "the waypoint"}{handbrakes}", ToastPosition.Bottom);
+      var text = SendTo(locomotive, location, out var sent);
+      MapPulse.Show(position, sent ? SentColor : RefusedColor);
+      Toast.Present(text, ToastPosition.Bottom);
     }
     catch (Exception exception)
     {
       MapPlusMod.Log?.Error(exception, "Couldn't send the locomotive from the map");
       Toast.Present("Couldn't send the locomotive. See the Message Log.", ToastPosition.Bottom);
     }
+  }
+
+  internal static string SendTo(BaseLocomotive locomotive, Location location, out bool sent)
+  {
+    sent = false;
+    if (!CanReach(locomotive, location, out var failure)) return failure ?? $"{locomotive.DisplayName} can't find a route there.";
+    var orders = new AutoEngineerOrdersHelper(locomotive, new AutoEngineerPersistence(locomotive.KeyValueObject));
+    bool captured;
+    AppDomain.CurrentDomain.SetData(CapturedKey, null);
+    try
+    {
+      orders.SetWaypointOrder(new OrderWaypoint(Graph.LocationToString(location), null));
+      captured = AppDomain.CurrentDomain.GetData(CapturedKey) is true;
+    }
+    finally
+    {
+      AppDomain.CurrentDomain.SetData(CapturedKey, null);
+    }
+    sent = true;
+    var place = TrackPainter.PlaceAt(Graph.Shared.GetPosition(location), PlaceRadius);
+    var where = place?.Name ?? "the waypoint";
+    if (captured) return $"{locomotive.DisplayName}: the trip to {where} was added to its orders";
+    var released = ReleaseHandbrakes(locomotive);
+    var handbrakes = released == 0 ? "" : $", released {released} {(released == 1 ? "handbrake" : "handbrakes")}";
+    return $"{locomotive.DisplayName} heading to {where}{handbrakes}";
   }
 
   private static bool CanReach(BaseLocomotive locomotive, Location location, out string failure)
@@ -127,7 +166,7 @@ internal static class MapWaypoints
     return false;
   }
 
-  private static int ReleaseHandbrakes(BaseLocomotive locomotive)
+  internal static int ReleaseHandbrakes(BaseLocomotive locomotive)
   {
     var released = 0;
     foreach (var car in Consist.Of(locomotive))

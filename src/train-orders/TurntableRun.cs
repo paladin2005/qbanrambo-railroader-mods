@@ -407,7 +407,7 @@ internal sealed class TurntableRun
     OrderCapture.Dispatching = true;
     try
     {
-      helper.SetWaypointOrder(waypoint);
+      helper.SetWaypointOrder(waypoint, Dispatcher.SpeedFor(_locomotive));
     }
     finally
     {

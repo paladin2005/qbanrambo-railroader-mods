@@ -22,7 +22,7 @@ The mod is optional: other players don't need it to join your game, and you don'
 
 Click a locomotive to open its context menu and hover **Go to**:
 
-- **Waybills** lists where the cars of that train are waybilled, with how many cars are going to each and the town it's in. Each one opens a submenu with **Deliver** (see below) and the ways to go there.
+- **Waybills** lists where the cars of that train are waybilled, with how many cars are going to each and the town it's in. Destinations on the same track are one entry, such as an industry's loads and empties both going to its track. Each one opens a submenu with **Deliver** (see below) and the ways to go there.
 - **Towns** lists the towns you've unlocked and connected with track. Hover one to see its industries, stations, coaling towers and diesel stands. Interchanges with several customers on the same tracks show once, under the interchange's name. Locked towns and locations on unbuilt track don't show up.
 
 Click a destination. The AE gets a waypoint at the far end of the nearest track of that location it can reach, so the train pulls onto it, at the AE's current speed limit. If the AE can't find a route, the reason shows at the bottom of the screen and nothing changes.
@@ -33,7 +33,7 @@ The same menu also opens from the engineer's panel: in Waypoint mode, a **Go to*
 
 Each destination under **Waybills** opens a small submenu:
 
-- **Deliver N cars**: the train goes to that industry, puts the cars waybilled there on its track with the engine facing out, and leaves them: handbrake set on the car at the cut, air closed on both sides, hoses off, uncoupled. Then the engine pulls a few meters away, so you see them part. The cars have to be together at one end of the train (otherwise the item is greyed out and says so); locomotives and tenders never count. If the train is already standing there with those cars on the track, it leaves them right away.
+- **Deliver N cars**: the train goes to that industry, puts the cars waybilled to that track on it with the engine facing out, and leaves them: handbrake set on the car at the cut, air closed on both sides, hoses off, uncoupled. Then the engine pulls a few meters away, so you see them part. The cars have to be together at one end of the train (otherwise the item is greyed out and says so); locomotives and tenders never count. If the train is already standing there with those cars on the track, it leaves them right away.
 - **Just go**, or the entrance and coupling items described below: the train goes there and stops with the whole train, as before.
 
 ### Couple to existing cars
@@ -72,6 +72,8 @@ A refuel in progress carries on after you load a save.
 - **Turn around**: the engine goes onto the bridge, the bridge turns half a circle and the engine comes back off the way it went on, now facing the other way.
 - **Stall 1, 2, …**: the engine goes on, the bridge turns to that stall and the engine parks in it, front first. Stalls with something already in them are greyed out.
 - **Lead** tracks (named after the direction they leave in, such as **Lead NE**): the engine goes on, the bridge turns to that track and the engine leaves on it, front first. Handy to bring an engine out of a stall.
+
+Hover a choice and its track lights up (the bridge, for Turn around), in the world and, with Map Plus, on the maps.
 
 Go to lines the bridge up with the track the engine comes from, drives the engine onto the middle of it, turns it and drives it off. It's for an engine on its own, with its tender: with cars coupled or an engine longer than the bridge, it says so. Messages at the bottom tell you each step, and a move in progress carries on after you load a save.
 
@@ -112,6 +114,12 @@ Once a session, when a game loads, the mod asks Nexus Mods whether the QbanRambo
 Disable **QbanRambo's Goto** in **Mods**, or delete its folder from `Documents\Railroader\Mods`, and restart the game. It doesn't change your saves.
 
 ## Changelog
+
+### 1.7.0
+
+- **Waybills**: destinations on the same track are one entry, so an industry's loads and empties going to its track (Stenzel's BB2, for one) are delivered together.
+- **Turntable**: hovering Turn around, a stall or a lead lights its track in the world, and on the maps with Map Plus.
+- **Settings in Preferences > Mods** have a cleaner layout: each checkbox first, with its full name beside it.
 
 ### 1.6.0
 

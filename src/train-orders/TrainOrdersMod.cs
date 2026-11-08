@@ -18,6 +18,7 @@ public sealed class TrainOrdersMod : IModEntryPoint, IWorldLifecycle
     _harmony.PatchAll(typeof(TrainOrdersMod).Assembly);
     System.AppDomain.CurrentDomain.SetData(OrderCapture.TurntableHookKey, OrderCapture.TurntableHook);
     System.AppDomain.CurrentDomain.SetData(OrderCapture.RunAroundHookKey, OrderCapture.RunAroundHook);
+    System.AppDomain.CurrentDomain.SetData(WebOrders.HookKey, WebOrders.Hook);
     System.AppDomain.CurrentDomain.SetData(OrderCapture.WindowOpenKey, OrderCapture.WindowOpenHook);
     System.AppDomain.CurrentDomain.SetData(Forecast.FutureCarsKey, Forecast.FutureCarsHook);
     ModsTab.Add(_harmony, TrainOrdersSettings.Draw, context.Log);
@@ -33,6 +34,7 @@ public sealed class TrainOrdersMod : IModEntryPoint, IWorldLifecycle
     OnWorldUnload();
     System.AppDomain.CurrentDomain.SetData(OrderCapture.TurntableHookKey, null);
     System.AppDomain.CurrentDomain.SetData(OrderCapture.RunAroundHookKey, null);
+    System.AppDomain.CurrentDomain.SetData(WebOrders.HookKey, null);
     System.AppDomain.CurrentDomain.SetData(OrderCapture.WindowOpenKey, null);
     System.AppDomain.CurrentDomain.SetData(Forecast.FutureCarsKey, null);
     Icons.Reset();
@@ -53,6 +55,7 @@ public sealed class TrainOrdersMod : IModEntryPoint, IWorldLifecycle
   public void OnWorldUnload()
   {
     OrderCapture.Reset();
+    CoupleAir.Clear();
     PickerForecast.Reset();
     Places.Reset();
     Fuel.Reset();

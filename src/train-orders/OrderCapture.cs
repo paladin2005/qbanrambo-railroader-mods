@@ -95,7 +95,12 @@ internal static class OrderCapture
   {
     try
     {
-      if (Dispatching || LocomotiveField?.GetValue(helper) is not Car locomotive || !OrdersWindow.IsOpenFor(locomotive)) return true;
+      if (Dispatching || LocomotiveField?.GetValue(helper) is not Car locomotive) return true;
+      if (!OrdersWindow.IsOpenFor(locomotive))
+      {
+        if (waypoint.WantsCouple) CoupleAir.Begin(locomotive, waypoint);
+        return true;
+      }
       var orders = OrderList.Read(locomotive);
       var station = waypoint.WantsCouple ? null : AppDomain.CurrentDomain.GetData(GotoStationKey) as string;
       var refuel = waypoint.WantsCouple ? null : AppDomain.CurrentDomain.GetData(GotoRefuelKey) as string;

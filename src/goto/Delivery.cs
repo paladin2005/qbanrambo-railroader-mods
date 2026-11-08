@@ -21,11 +21,22 @@ internal static class Delivery
   private const string TrainOrdersOpenKey = "qbanrambo.train-orders.window-open";
   private const float PullDistance = 3.5f;
 
-  internal static List<Car> Block(BaseLocomotive locomotive, string identifier, out bool atA)
+  internal static string KeyFor(OpsCarPosition position)
+  {
+    var spans = (position.Spans ?? Array.Empty<TrackSpan>()).Where(span => span != null).Select(GotoMenu.SpanKey).OrderBy(key => key).ToList();
+    return spans.Count > 0 ? string.Join("|", spans) : "id:" + position.Identifier;
+  }
+
+  internal static bool GoesTo(Car car, string key)
+  {
+    return car.Waybill.HasValue && !car.Waybill.Value.Completed && KeyFor(car.Waybill.Value.Destination) == key;
+  }
+
+  internal static List<Car> Block(BaseLocomotive locomotive, OpsCarPosition position, out bool atA)
   {
     atA = false;
-    if (string.IsNullOrEmpty(identifier)) return null;
-    return EndBlock(locomotive, car => car.Waybill.HasValue && !car.Waybill.Value.Completed && car.Waybill.Value.Destination.Identifier == identifier, out atA);
+    var key = KeyFor(position);
+    return EndBlock(locomotive, car => GoesTo(car, key), out atA);
   }
 
   private static List<Car> EndBlock(BaseLocomotive locomotive, Func<Car, bool> member, out bool atA)
@@ -44,16 +55,17 @@ internal static class Delivery
     return fromB.Count == total && fromB.All(IsCar) ? fromB : null;
   }
 
-  internal static int Count(BaseLocomotive locomotive, string identifier)
+  internal static int Count(BaseLocomotive locomotive, OpsCarPosition position)
   {
-    return locomotive.EnumerateCoupled().Count(car => car.Waybill.HasValue && !car.Waybill.Value.Completed && car.Waybill.Value.Destination.Identifier == identifier);
+    var key = KeyFor(position);
+    return locomotive.EnumerateCoupled().Count(car => GoesTo(car, key));
   }
 
   internal static void Send(BaseLocomotive locomotive, OpsCarPosition position)
   {
     try
     {
-      var block = Block(locomotive, position.Identifier, out var atA);
+      var block = Block(locomotive, position, out var atA);
       if (block == null)
       {
         Toast.Present($"The cars for {position.DisplayName} aren't together at one end of the train", ToastPosition.Bottom);

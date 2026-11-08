@@ -101,8 +101,9 @@ internal sealed class CarIcons : MonoBehaviour
       if (car == null) return;
       var controller = TrainController.Shared;
       var target = car is BaseLocomotive ? car : Consist.Of(car).OfType<BaseLocomotive>().FirstOrDefault() ?? car;
-      if (controller != null) controller.SelectedCar = target;
-      if (!GameInput.IsShiftDown) CarPickable.HandleShowInspector(car);
+      var shift = GameInput.IsShiftDown;
+      if (controller != null && (shift || MapPlusConfig.ClickSelects)) controller.SelectedCar = target;
+      if (!shift) CarPickable.HandleShowInspector(car);
     }
     catch (Exception exception)
     {

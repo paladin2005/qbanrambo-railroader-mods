@@ -101,6 +101,19 @@ internal sealed class PlaceIcons : MonoBehaviour
     _dirty = true;
   }
 
+  private const float HoverSeconds = 0.3f;
+
+  private static Poi _hovered;
+  private static float _hoveredAt;
+
+  internal static Poi Hovered => _hovered != null && Time.unscaledTime - _hoveredAt < HoverSeconds ? _hovered : null;
+
+  internal static void MarkHovered(Poi poi)
+  {
+    _hovered = poi;
+    _hoveredAt = Time.unscaledTime;
+  }
+
   internal static Poi At(Vector3 gamePoint)
   {
     if (!MapPlusMod.Places.IsOn) return null;
@@ -274,6 +287,7 @@ internal sealed class PlaceIcons : MonoBehaviour
           var bucket = counts.TryGetValue(place.SpanKey, out var found) ? found : empty;
           return new PoiTrack(place.Name, bucket.Spotted.Count, bucket.Coming.Count);
         }).ToList();
+        var buckets = places.Select(place => counts.TryGetValue(place.SpanKey, out var found) ? found : empty).ToList();
         var stop = industry.PassengerStop;
         var riders = stop != null && stop.IsEnabledReachable ? stop.Waiting.Values.Sum(info => info.Total) : 0;
         fresh[key] = new Poi
@@ -287,7 +301,9 @@ internal sealed class PlaceIcons : MonoBehaviour
           Tracks = tracks,
           Spotted = tracks.Sum(track => track.Spotted),
           Coming = tracks.Sum(track => track.Coming),
-          Riders = riders
+          Riders = riders,
+          SpottedCars = buckets.SelectMany(bucket => bucket.Spotted).Distinct().ToList(),
+          ComingCars = buckets.SelectMany(bucket => bucket.Coming).Distinct().ToList()
         };
       }
     }
@@ -479,6 +495,8 @@ internal sealed class PlaceIcons : MonoBehaviour
     public int Spotted;
     public int Coming;
     public int Riders;
+    public List<Car> SpottedCars = new();
+    public List<Car> ComingCars = new();
     public bool Empty;
     public RectTransform Rect;
     public Image Image;
@@ -500,6 +518,8 @@ internal sealed class PlaceIcons : MonoBehaviour
       Spotted = other.Spotted;
       Coming = other.Coming;
       Riders = other.Riders;
+      SpottedCars = other.SpottedCars;
+      ComingCars = other.ComingCars;
       Empty = other.Empty;
     }
   }

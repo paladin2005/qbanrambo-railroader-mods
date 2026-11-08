@@ -297,7 +297,15 @@ internal static class Forecast
         front = NearerFront(outward[0]);
         result.Guess = true;
       }
-      Attach(outward, spots, front, step.Count, result, step.Id);
+      if (step.Leave.HasValue)
+      {
+        Attach(outward, spots, front, Maneuvers.AllCars, result);
+        LeaveOwn(outward, step.Leave.Value, front, result, step.Id);
+      }
+      else
+      {
+        Attach(outward, spots, front, step.Count, result, step.Id);
+      }
     }
 
     private void CoupleBack(ForecastResult result)
@@ -391,6 +399,31 @@ internal static class Forecast
       Stand(leaving, spots, cutFront);
       _leftCarId = leaving[0].Id;
       if (step.Id != null) _leftBy[step.Id] = leaving[0].Id;
+    }
+
+    private void LeaveOwn(List<ForecastCar> group, int leave, bool front, ForecastResult result, string stepId)
+    {
+      var fromEnd = front ? Train.ToList() : Enumerable.Reverse(Train).ToList();
+      var own = fromEnd.Skip(group.Count).TakeWhile(car => car.IsCar).Take(leave).ToList();
+      if (leave == OrderStep.LeaveAll && own.Count > 0) leave = own.Count;
+      if (own.Count < leave || fromEnd.Count <= group.Count + leave)
+      {
+        result.Problem = true;
+        result.Note = own.Count == 0 ? "No cars of the train to leave next to the coupling" : $"Only {Cars(own.Count)} of the train to leave next to the coupling";
+        return;
+      }
+      var leaving = Enumerable.Reverse(fromEnd.Take(group.Count + leave)).ToList();
+      List<CarSpot> spots = null;
+      if (_spots != null)
+      {
+        spots = leaving.Select(car => _spots[Train.IndexOf(car)]).Select(spot => front ? spot?.Reversed() : spot).ToList();
+      }
+      foreach (var car in group) result.Added.Remove(car.Id);
+      foreach (var car in own) result.Leaving.Add(car.Id);
+      foreach (var car in leaving) RemoveFromTrain(car);
+      Stand(leaving, spots, front);
+      _leftCarId = leaving[0].Id;
+      if (stepId != null) _leftBy[stepId] = leaving[0].Id;
     }
 
     private void RunAround(OrderStep step, ForecastResult result, bool current)

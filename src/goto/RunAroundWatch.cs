@@ -165,6 +165,7 @@ internal sealed class RunAroundWatch : MonoBehaviour
     }
     var helper = new AutoEngineerOrdersHelper(locomotive, new AutoEngineerPersistence(locomotive.KeyValueObject));
     AppDomain.CurrentDomain.SetData(GotoMenu.CapturedKey, null);
+    AppDomain.CurrentDomain.SetData(CoupleWatch.WatchedKey, true);
     try
     {
       helper.SetWaypointOrder(order.Value);
@@ -173,6 +174,7 @@ internal sealed class RunAroundWatch : MonoBehaviour
     finally
     {
       AppDomain.CurrentDomain.SetData(GotoMenu.CapturedKey, null);
+      AppDomain.CurrentDomain.SetData(CoupleWatch.WatchedKey, null);
     }
     CoupleWatch.Begin(locomotive, job.Far, order.Value.LocationString);
     job.LocationString = order.Value.LocationString;

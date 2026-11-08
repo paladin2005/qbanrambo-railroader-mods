@@ -185,10 +185,11 @@ svg {
 .toolbar {
   position: fixed;
   top: 12px;
-  right: 12px;
+  left: 380px;
   display: flex;
-  flex-direction: column;
-  padding: 4px;
+  flex-direction: row;
+  align-items: center;
+  padding: 3px;
   background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: 10px;
@@ -200,8 +201,8 @@ svg {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   padding: 0;
   background: transparent;
   border: none;
@@ -219,15 +220,17 @@ svg {
 }
 
 .toolbar .separator {
-  height: 1px;
-  margin: 4px 6px;
+  width: 1px;
+  height: 22px;
+  margin: 0 4px;
   background: var(--rule);
 }
 
 .card {
   position: fixed;
-  right: 64px;
   width: 250px;
+  max-height: calc(100vh - 72px);
+  overflow-y: auto;
   padding: 10px 14px 12px;
   background: var(--surface);
   border: 1px solid var(--rule);
@@ -411,6 +414,329 @@ svg {
   margin-left: 8px;
 }
 
+.toolbar button.hidden {
+  display: none;
+}
+
+.side-panel.orders-panel {
+  top: 12px;
+  left: auto;
+  right: 12px;
+  width: 430px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 3;
+}
+
+body.orders-open .legend {
+  right: 454px;
+}
+
+.orders-panel .tabs {
+  display: flex;
+  gap: 4px;
+  margin: 6px 0 8px;
+}
+
+.orders-panel .tabs button {
+  flex: 1;
+}
+
+.orders-panel .body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.orders-panel .toggles {
+  display: flex;
+  gap: 18px;
+  margin: 4px 0;
+}
+
+.orders-panel .toggles .switch-row {
+  gap: 8px;
+}
+
+.orders-panel .note {
+  margin: 4px 0 6px;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.orders-panel .scroll {
+  flex: 1;
+  min-height: 60px;
+  overflow-y: auto;
+  margin-right: -6px;
+  padding-right: 6px;
+}
+
+.orders-panel .empty {
+  padding: 10px 2px;
+  color: var(--ink-2);
+}
+
+.orders-panel .order {
+  padding: 4px 0 5px;
+  border-bottom: 1px solid rgba(61, 54, 40, 0.6);
+}
+
+.orders-panel .order-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.orders-panel .order-text {
+  flex: 1;
+  padding-top: 3px;
+}
+
+.orders-panel .order.done .order-text {
+  color: rgba(237, 231, 218, 0.35);
+}
+
+.orders-panel .order.current .order-text {
+  color: #FFC060;
+}
+
+.orders-panel .icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+}
+
+.orders-panel .icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.orders-panel .icon:disabled,
+.orders-panel button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.orders-panel .order-buttons {
+  display: flex;
+  gap: 3px;
+}
+
+.orders-panel .order-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 0 16px;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.orders-panel select,
+.orders-panel input[type="text"] {
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  padding: 3px 6px;
+}
+
+.side-panel .riders {
+  margin: 2px 0 8px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  background: rgba(140, 200, 255, 0.08);
+}
+
+.side-panel .riders .sub {
+  margin-top: 2px;
+}
+
+.orders-panel .order:hover {
+  background: rgba(64, 217, 255, 0.06);
+}
+
+.orders-panel .strip {
+  display: flex;
+  align-items: flex-end;
+  margin: 5px 0 0 16px;
+  height: 16px;
+}
+
+.orders-panel .strip .side {
+  display: flex;
+  align-items: flex-end;
+  height: 16px;
+  overflow: hidden;
+}
+
+.orders-panel .strip .strip-car {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  height: 15px;
+}
+
+.orders-panel .strip .strip-car i {
+  display: block;
+  height: 12px;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+.orders-panel .strip .strip-car.new::after {
+  content: '';
+  display: block;
+  height: 2px;
+  margin: 1px -1px 0;
+  background: #FFBF61;
+}
+
+.orders-panel .strip .strip-car.leaving i {
+  opacity: 0.3;
+}
+
+.orders-panel .strip .arrow {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 15px;
+  color: #CEBA94;
+}
+
+.orders-panel .strip .arrow svg {
+  width: 7px;
+  height: 12px;
+  fill: currentColor;
+}
+
+.orders-panel .strip.problem .arrow {
+  color: #FF6B52;
+}
+
+.orders-panel .strip .more {
+  flex: none;
+  margin-right: 2px;
+  color: #C7BFB3;
+  font-size: 11px;
+  line-height: 15px;
+  text-align: center;
+}
+
+.orders-panel .add {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.orders-panel .add .icon {
+  width: 34px;
+  height: 34px;
+}
+
+.orders-panel .add .icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.orders-panel .strip-buttons {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.orders-panel .strip-buttons .spacer {
+  flex: 1;
+}
+
+.orders-panel .job-save {
+  display: flex;
+  gap: 6px;
+}
+
+.orders-panel .job-save input {
+  flex: 1;
+}
+
+.orders-panel .job {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(61, 54, 40, 0.6);
+}
+
+.orders-panel .job span {
+  flex: 1;
+}
+
+.orders-menu {
+  max-height: 70vh;
+  overflow-y: auto;
+  min-width: 230px;
+  z-index: 9;
+}
+
+.menu.orders-menu {
+  min-width: 260px;
+  max-width: 440px;
+  padding: 3px;
+}
+
+.menu.orders-menu button {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 2px 8px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.menu.orders-menu .title {
+  padding: 2px 8px 3px;
+  font-size: 11px;
+}
+
+.menu.orders-menu .label {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.menu.orders-menu .sub {
+  flex: 0 1 auto;
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.menu.orders-menu .more {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--ink-2);
+}
+
+.menu.orders-menu .sub + .more {
+  margin-left: 0;
+}
+
+.menu.orders-menu button.open {
+  background: var(--hover);
+}
+
 .menu {
   position: fixed;
   min-width: 180px;
@@ -511,6 +837,10 @@ svg {
 .tooltip .field b {
   color: var(--ink);
   font-weight: 400;
+}
+
+.tooltip .field.current {
+  color: #FFE08C;
 }
 
 .tooltip .warn {

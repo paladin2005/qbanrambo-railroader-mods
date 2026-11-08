@@ -5,12 +5,15 @@ using System.Reflection;
 using Model;
 using Model.Ops;
 using Model.Ops.Definition;
+using Model.Ops.Timetable;
 using UnityEngine;
 
 namespace QbanRambo.MapPlus;
 
 internal static class CarInfo
 {
+  private const string PassengerLoad = "rr/passengers";
+
   private const float MetersToFeet = 3.28084f;
   private const float MetersPerSecondToMph = 2.23694f;
   private const float CouplerGap = 1f;
@@ -79,7 +82,8 @@ internal static class CarInfo
     var model = car.DefinitionInfo?.Metadata?.Name;
     if (!string.IsNullOrEmpty(model)) lines.Add(model);
     lines.Add(Loads(car) ?? "Empty");
-    lines.Add(Destination(car)?.Describe() ?? "No waybill");
+    var destination = DestinationText(car);
+    if (destination != null) lines.Add(destination);
     lines.AddRange(Warnings(car));
     return new TooltipInfo(car.DisplayName, string.Join("\n", lines));
   }
@@ -106,11 +110,77 @@ internal static class CarInfo
       .Select(group => $"{group.Key} ({group.Count()})")
       .ToList();
     if (destinations.Count > 0) lines.Add("To " + string.Join(", ", destinations));
+    var riders = TrainPassengers(consist);
+    if (riders != null)
+    {
+      lines.Add(riders.Summary);
+      if (riders.Destinations.Count > 0) lines.Add("Passengers to " + string.Join(", ", riders.Destinations.Select(stop => $"{stop.Name} ({stop.Count})")));
+    }
     var handbrakes = consist.Count(car => car.air != null && car.air.handbrakeApplied);
     if (handbrakes > 0) lines.Add(Count(handbrakes, "handbrake", "handbrakes") + " set");
     var hotboxes = consist.Count(car => car.HasHotbox);
     if (hotboxes > 0) lines.Add(Count(hotboxes, "hotbox", "hotboxes") + "!");
     return new TooltipInfo(locomotive.DisplayName, string.Join("\n", lines));
+  }
+
+  internal static string DestinationText(Car car)
+  {
+    var destination = Destination(car)?.Describe();
+    if (destination != null) return destination;
+    if (CarriesPassengers(car))
+    {
+      var symbol = TrainSymbol(car);
+      if (symbol != null) return symbol;
+      var stops = car.GetPassengerMarker()?.Destinations;
+      return stops != null && stops.Count > 0 ? "Stops at " + string.Join(", ", stops.Select(StopName).OrderBy(name => name)) : null;
+    }
+    return car.CarType.IsFreight ? "No waybill" : null;
+  }
+
+  internal static bool CarriesPassengers(Car car) => car?.Definition?.LoadSlots != null && car.Definition.LoadSlots.Any(slot => slot.RequiredLoadIdentifier == PassengerLoad);
+
+  internal static string Passengers(Car car) => CarriesPassengers(car) ? $"{car.PassengerCountString()} passengers" : null;
+
+  internal static string TrainSymbol(Car car)
+  {
+    var timetable = TimetableController.Shared;
+    if (timetable == null) return null;
+    foreach (var member in Consist.Of(car).OfType<BaseLocomotive>().Prepend(car))
+    {
+      if (member == null || string.IsNullOrEmpty(member.trainCrewId)) continue;
+      if (timetable.TryGetTrainForTrainCrewId(member.trainCrewId, out var train) && train != null) return $"Train {train.DisplayStringShort}";
+    }
+    return null;
+  }
+
+  internal static TrainRiders TrainPassengers(IEnumerable<Car> consist)
+  {
+    var coaches = consist.Where(CarriesPassengers).ToList();
+    if (coaches.Count == 0) return null;
+    var count = 0;
+    var capacity = 0;
+    var byStop = new Dictionary<string, int>();
+    foreach (var coach in coaches)
+    {
+      var slot = coach.Definition.LoadSlots.First(candidate => candidate.RequiredLoadIdentifier == PassengerLoad);
+      capacity += Mathf.RoundToInt(slot.MaximumCapacity);
+      var marker = coach.GetPassengerMarker();
+      if (marker == null) continue;
+      count += marker.Value.TotalPassengers;
+      foreach (var group in marker.Value.Groups)
+      {
+        if (string.IsNullOrEmpty(group.Destination) || group.Count <= 0) continue;
+        byStop[group.Destination] = byStop.TryGetValue(group.Destination, out var existing) ? existing + group.Count : group.Count;
+      }
+    }
+    var stops = byStop.OrderByDescending(pair => pair.Value).Select(pair => (StopName(pair.Key), pair.Value)).ToList();
+    return new TrainRiders(count, capacity, stops);
+  }
+
+  private static string StopName(string identifier)
+  {
+    var stop = OpsController.Shared?.AllPassengerStops?.FirstOrDefault(candidate => candidate != null && candidate.identifier == identifier);
+    return stop != null ? stop.DisplayName : identifier;
   }
 
   internal static Destination Destination(Car car)
@@ -133,6 +203,8 @@ internal static class CarInfo
     var slots = car.Definition?.LoadSlots;
     if (slots == null) return null;
     var parts = new List<string>();
+    var riders = Passengers(car);
+    if (riders != null) parts.Add(riders);
     for (var index = 0; index < slots.Count; index++)
     {
       var info = car.GetLoadInfo(index);
@@ -219,4 +291,20 @@ internal sealed class Destination
     var town = Area != null && !string.IsNullOrEmpty(Area.name) && !Name.Contains(Area.name) ? $", {Area.name}" : "";
     return $"To {Name}{town}{(Arrived ? " (spotted)" : "")}";
   }
+}
+
+internal sealed class TrainRiders
+{
+  public TrainRiders(int count, int capacity, List<(string Name, int Count)> destinations)
+  {
+    Count = count;
+    Capacity = capacity;
+    Destinations = destinations;
+  }
+
+  public int Count { get; }
+  public int Capacity { get; }
+  public List<(string Name, int Count)> Destinations { get; }
+
+  public string Summary => Capacity > 0 ? $"Passengers {Count}/{Capacity} ({Mathf.RoundToInt(100f * Count / Capacity)}%)" : $"Passengers {Count}";
 }

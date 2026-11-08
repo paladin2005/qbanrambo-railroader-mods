@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using HarmonyLib;
 using Railroader.Modding;
+using TMPro;
 using UI.Builder;
 using UI.PreferencesWindow;
 using UnityEngine;
@@ -13,6 +14,8 @@ internal static class ModsTab
 {
   private const string SlotKey = "ashenmare.preferences-mods.v1";
   private const string TabId = "ashenmare.mods";
+  private const float Indent = 12f;
+  private const float Gap = 8f;
 
   private static readonly List<Action<UIPanelBuilder>> Mine = new();
   private static IModLogger _log;
@@ -69,7 +72,17 @@ internal static class ModsTab
 
   internal static void Toggle(UIPanelBuilder builder, string label, Func<bool> get, Action<bool> set, string tooltip)
   {
-    builder.AddField(label, builder.AddToggle(get, value => Safely(() => set(value)))).Tooltip(label, tooltip);
+    builder.HStack(row =>
+    {
+      row.Spacer(Indent);
+      row.AddToggle(get, value => Safely(() => set(value)));
+      row.Spacer(Gap);
+      row.AddLabel(label, text =>
+      {
+        text.fontStyle |= FontStyles.UpperCase;
+        text.alignment = TextAlignmentOptions.MidlineLeft;
+      }).FlexibleWidth();
+    }).Tooltip(label, tooltip);
   }
 
   internal static string Note(string text) => $"<style=Footnote>{text}</style>";

@@ -62,11 +62,11 @@ internal static class WebTrackInfo
         var condition = controller != null ? TrackInfo.ConditionPercent(controller, segment) : -1;
         var grading = controller != null ? controller.GetGradingClass(segment) : 0;
         var grade = graph != null ? (float)Math.Round(Mathf.Abs(graph.GradeAtLocation(new Location(segment, segment.GetLength() / 2f, TrackSegment.End.A))), 1) : 0f;
-        rows[value] = new object[] { segment.EffectiveSpeedLimitMph, grading, condition, grade, placeOf[value] };
+        rows[value] = new object[] { segment.EffectiveSpeedLimitMph, grading, condition, grade, placeOf[value], (int)segment.TiePaintStripe };
       }
       catch (Exception)
       {
-        rows[value] = new object[] { 0, 0, -1, 0f, placeOf[value] };
+        rows[value] = new object[] { 0, 0, -1, 0f, placeOf[value], 0 };
       }
     }
     _cache = Json(new { ok = true, sv = version, s = rows, pl = names });

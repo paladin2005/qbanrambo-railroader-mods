@@ -12,6 +12,8 @@ namespace QbanRambo.Goto;
 
 internal sealed class CoupleWatch : MonoBehaviour
 {
+  internal const string WatchedKey = "qbanrambo.couple-watched";
+
   private const float TickSeconds = 0.5f;
   private const float SettleSeconds = 2f;
   private const float OrderSettleSeconds = 2f;

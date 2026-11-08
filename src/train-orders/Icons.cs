@@ -18,6 +18,8 @@ internal static class Icons
   internal const string RefuelName = "qbanrambo.train-orders.refuel";
   internal const string TurntableName = "qbanrambo.train-orders.turntable";
   internal const string PickUpName = "qbanrambo.train-orders.pickup";
+  internal const string SpeedName = "qbanrambo.train-orders.speed";
+  internal const string GoBackName = "qbanrambo.train-orders.goback";
   internal const string GotoName = "qbanrambo.train-orders.goto";
 
   private const int Size = 64;
@@ -33,7 +35,7 @@ internal static class Icons
     Dot(14f, 46f), Line(25f, 46f, 52f, 46f));
 
   internal static bool EnsureButtons() => Ensure(TrashName, Trash) && Ensure(UpName, Up) && Ensure(DownName, Down) && Ensure(CopyName, Copy) && Ensure(PasteName, Paste)
-    && Ensure(CutName, Cut) && Ensure(WaitName, Wait) && Ensure(StationName, Station) && Ensure(RefuelName, Refuel) && Ensure(TurntableName, Turntable) && Ensure(PickUpName, PickUp) && Ensure(GotoName, Goto);
+    && Ensure(CutName, Cut) && Ensure(WaitName, Wait) && Ensure(StationName, Station) && Ensure(RefuelName, Refuel) && Ensure(TurntableName, Turntable) && Ensure(PickUpName, PickUp) && Ensure(GotoName, Goto) && Ensure(SpeedName, Speed) && Ensure(GoBackName, GoBack);
 
   internal static void Reset()
   {
@@ -118,6 +120,26 @@ internal static class Icons
       Line(32f, 32f, 32f, 46f),
       Line(32f, 32f, 43f, 32f),
       new(new Vector2(32f, 32f), new Vector2(32f, 32f), 3.5f)
+    };
+    return Draw(strokes.ToArray());
+  }
+
+  private static Sprite GoBack()
+  {
+    var strokes = new List<Stroke>(Arc(32f, 32f, 21f, 60f, -240f, 36))
+    {
+      Line(42.5f, 50.2f, 50f, 40f),
+      Line(42.5f, 50.2f, 54f, 55f)
+    };
+    return Draw(strokes.ToArray());
+  }
+
+  private static Sprite Speed()
+  {
+    var strokes = new List<Stroke>(Arc(32f, 26f, 23f, 200f, -20f, 30))
+    {
+      Line(32f, 26f, 44f, 40f),
+      new(new Vector2(32f, 26f), new Vector2(32f, 26f), 4.5f)
     };
     return Draw(strokes.ToArray());
   }

@@ -26,6 +26,7 @@ internal static class WebTrain
   private const float NearbyMeters = 2f;
   private const int AllCars = 0;
   private const int AlwaysRefuel = 100;
+  private const int LeaveAll = 1000;
 
   private static readonly Dictionary<string, string> PlaceNames = new();
 
@@ -83,9 +84,35 @@ internal static class WebTrain
         destinations
       },
       engines = engines.Select(Engine).ToList(),
+      riders = Riders(consist),
       consist = consist.Select(Row).ToList(),
-      orders = TrainOrders(lead)
+      orders = TrainOrders(lead),
+      dsg = DestinationSegments(cars)
     });
+  }
+
+  private static object DestinationSegments(List<Car> cars)
+  {
+    var coming = new HashSet<int>();
+    var spotted = new HashSet<int>();
+    var ops = OpsController.Shared;
+    var index = WebMapData.SegmentIndex;
+    if (ops == null) return null;
+    foreach (var car in cars)
+    {
+      if (car == null || !ops.TryGetDestinationInfo(car, out _, out var arrived, out _, out var position)) continue;
+      var target = arrived ? spotted : coming;
+      foreach (var span in position.Spans ?? Enumerable.Empty<TrackSpan>())
+      {
+        if (span == null) continue;
+        foreach (var segment in span.GetSegments())
+        {
+          if (segment != null && index.TryGetValue(segment, out var value)) target.Add(value);
+        }
+      }
+    }
+    spotted.ExceptWith(coming);
+    return new { c = coming.OrderBy(value => value).ToList(), s = spotted.OrderBy(value => value).ToList() };
   }
 
   private static bool IsLoaded(Car car)
@@ -147,6 +174,12 @@ internal static class WebTrain
     return data;
   }
 
+  private static object Riders(List<Car> consist)
+  {
+    var riders = CarInfo.TrainPassengers(consist);
+    return riders == null ? null : new { n = riders.Count, cap = riders.Capacity, d = riders.Destinations.Select(stop => new { n = stop.Name, c = stop.Count }).ToList() };
+  }
+
   private static object Row(Car car)
   {
     var kind = car is BaseLocomotive ? "engine" : car.CarType.IsTender ? "tender" : "car";
@@ -159,7 +192,8 @@ internal static class WebTrain
       len = Mathf.RoundToInt(car.carLength * MetersToFeet),
       w = Mathf.RoundToInt(car.Weight / PoundsPerTon),
       load = kind == "car" ? CarInfo.Loads(car) : null,
-      dest = kind == "car" ? CarInfo.Destination(car)?.Describe() : null,
+      dest = kind == "car" ? CarInfo.DestinationText(car) : null,
+      px = kind == "car" && CarInfo.CarriesPassengers(car),
       color = kind == "car" && car.CarType.IsFreight ? Hex(CarInfo.MapColor(car)) : null,
       hb = car.air != null && car.air.handbrakeApplied,
       hot = car.HasHotbox,
@@ -192,8 +226,16 @@ internal static class WebTrain
       status = value["status"].StringValueOrDefault(null),
       repeat = value["repeat"].BoolValueOrDefault(false),
       smart = value["pass"].BoolValueOrDefault(false),
-      steps = steps.Select((step, index) => new { t = Describe(step), s = index < at ? "done" : index == at ? "current" : "next" }).ToList()
+      steps = steps.Select((step, index) => new { t = Describe(step), s = index < at ? "done" : index == at ? "current" : "next", p = Spot(step) }).ToList()
     };
+  }
+
+  private static double[] Spot(Value step)
+  {
+    var graph = Graph.Shared;
+    if (graph == null) return null;
+    var position = OrderMarkers.PositionOf(step, graph);
+    return position.HasValue ? new[] { Math.Round(position.Value.x, 1), Math.Round(position.Value.z, 1) } : null;
   }
 
   internal static string Describe(Value step)
@@ -205,7 +247,16 @@ internal static class WebTrain
       {
         case 0:
           var waypoint = OrderWaypoint.FromPropertyValue(step["wpt"]);
-          if (waypoint is { WantsCouple: true } couple) return count > 0 ? $"Couple to {CarName(couple.CoupleToCarId)}, take {(count == 1 ? "1 car" : $"{count} cars")}" : $"Couple to {CarName(couple.CoupleToCarId)}";
+          if (waypoint is { WantsCouple: true } couple)
+          {
+            var coupled = $"Couple to {CarName(couple.CoupleToCarId)}";
+            if (!step["leave"].IsNull)
+            {
+              var leave = step["leave"].IntValueOrDefault(0);
+              return leave == 0 ? $"{coupled}, take none" : leave >= LeaveAll ? $"{coupled}, leave all its cars" : $"{coupled}, leave {(leave == 1 ? "1 car" : $"{leave} cars")} of its own";
+            }
+            return count > 0 ? $"{coupled}, take {(count == 1 ? "1 car" : $"{count} cars")}" : coupled;
+          }
           var smart = !step["smart"].IsNull && step["smart"].BoolValueOrDefault(false) ? ", smart entrance" : "";
           return $"Go to {(waypoint.HasValue ? WaypointName(waypoint.Value) : "waypoint")}{smart}";
         case 1:
@@ -247,6 +298,11 @@ internal static class WebTrain
           return step["side"].IntValueOrDefault(1) == 2 ? "Run around the cars behind" : "Run around the cars in front";
         case 15:
           return "Couple to the cars left by an earlier order";
+        case 16:
+          return count < 0 ? "Set speed to max" : $"Set speed {count} mph";
+        case 17:
+          var times = step["times"].IsNull ? (int?)null : step["times"].IntValueOrDefault(1);
+          return times.HasValue ? $"Go back to an earlier order, {(times.Value == 1 ? "once" : $"{times.Value} times")}" : $"Go back to an earlier order until {count / 60}:{count % 60:D2}";
         case 9:
           return count == AllCars ? "Pick up all cars" : count == 1 ? "Pick up 1 car" : $"Pick up {count} cars";
         case 8:

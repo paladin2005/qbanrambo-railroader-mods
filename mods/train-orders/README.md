@@ -33,6 +33,8 @@ The **Add** buttons are icons; hover one for its name. From left to right:
 - **Wait > Until loaded**: the train waits where it is until every freight car is full and the industry has finished with it (given it its next waybill), then goes on. **Until unloaded** waits until they're all empty, for example at the mill you delivered to. **Until repaired** waits on a repair track until every car reaches its repair limit; a heavily worn car only gets as far as the game allows until its next overhaul. These orders show how many cars are full, empty or repaired.
 - **Wait > Wait time**: **Until tomorrow** waits until the next day starts at midnight, when industries take their next share of cars, so a log run doesn't fill the mill beyond what it takes in a day. **Until 06:00** (or whatever hour your company serves the interchange, in Company > Settings) waits until the morning, when the game's Sleep wakes you. **Until a time** waits for the hour and minutes you set on the order's **Time** line; a time already past today waits until tomorrow, so a list on Repeat runs to a schedule. **Minutes** waits 5 to 45 minutes and **Hours** 1 to 12 hours. The order counts down, and the game's Wait and Sleep buttons count too.
 - **Leave cars > Run around the cars in front / behind**: see Run around below.
+- **Go back** (a circular arrow): pick an order of the list, then **Until a time** or **Times** (once to 20). When the list reaches it, it goes back to that order until the time you set on its **Time** line, or that many times, then goes on with the next one. For example: go to the mill, wait until loaded, go to the interchange, wait until unloaded, go back to order 1 until 18:00, refuel, go to the shed, wait until 6:00, with Repeat on. A loop reached more than 12 hours before its time is skipped, so it doesn't run all night. The link to the order survives moving orders, Copy and Paste and saved jobs.
+- **Set speed** (a gauge): 5 to the railroad's speed limit in steps of 5 mph, or **Max**. The trips after it, including the moves to refuel and on turntables, run at that speed until another Set speed order. For example: Set speed 10 mph before the stretch a work train crawls over, Set speed Max after it.
 - **Stations**: pick a passenger station to add "Go to" that station. See Passengers below.
 - **Refuel**: pick a water tower, coaling tower or diesel stand, or **Coal and water** in a yard that has both, to add a refuel order. See Refuel below.
 - **Turntable**: pick a turntable to add a turntable order. See Turntable below.
@@ -44,7 +46,7 @@ Waypoints are added too: while the window is open, every waypoint you set for th
 Click **Start**. The engineer runs the orders in turn:
 
 - Before every move it releases any handbrakes set in the train.
-- After a coupling it connects the air on the whole train and releases the handbrakes.
+- After a coupling it connects the air on the whole train and releases the handbrakes. It does the same, with **Air and handbrakes after coupling** on (Preferences > Mods > Train Orders, on by default), when you send the engine to couple with the game's waypoint tool while its window is closed.
 - When it stops short of a waypoint at the end of a track, the order still counts as done.
 
 Orders stay in the list when they're done: finished ones are dimmed, the current one is highlighted and the rest are white. When the last one is done, **Start** runs the list again from the top, and **Clear** empties it. Turn on **Repeat** to have it start over by itself, for runs like loading logs, taking them to the mill and waiting until tomorrow.
@@ -57,7 +59,7 @@ The orders pause by themselves, with the reason shown, when the engineer can't f
 
 Under every order that couples, picks up or leaves cars, a thin line shows the train before and after that order: the locomotive on the left, and each car as a small picture of its type (locomotive, tender, boxcar, hopper, tank car, flatcar, gondola, coach, caboose) in the color of the town it's going to, the same colors as the game's waypoint picker. Cars that come in are underlined, cars left behind are faded. A long train is shortened in the middle with a "+N", always keeping the engines and the end that changes. Hover the line for the cars the order takes or leaves and the whole train after it. A red arrow means the order won't work as the list stands (for example, leaving 4 cars when only 2 will be there), with the reason in the tooltip.
 
-Hover an order and the train and the cars it leaves appear on the track in cyan, right where they'll stand after that order, with arrows on the engines like the game's waypoint picker.
+Hover an order and the train and the cars it leaves appear on the track in cyan, right where they'll stand after that order, with arrows on the engines like the game's waypoint picker. With Map Plus they show on its maps too.
 
 While the window is open, the game's waypoint picker draws the train you'll have after your last order instead of the one you have now, so you see its real length and whether it fits before you pick the spot.
 
@@ -83,7 +85,10 @@ Jobs are kept outside your saves, in the game's preferences, so every engine in 
 
 ### Picking up cars
 
-- A coupling order ("Couple to RDG 16379", from the game's picker or Goto's **Couple to existing cars**) has a second line, **Take**: **All cars** (the default) or 1 to 10. After coupling, the train keeps that many of the cars it coupled to, counted from the coupling, and leaves the rest behind the usual way, with a handbrake set.
+- A coupling order ("Couple to RDG 16379", from the game's picker, Goto's **Couple to existing cars** or Map Plus's right-click on a car) has a second line, **Then**, for what happens after coupling:
+  - **Take all** (the default), or **Take 1** to **10**: the train keeps that many of the cars it coupled to, counted from the coupling, and leaves the rest behind the usual way, with a handbrake set.
+  - **Take none**: it uncouples right away; the cars stay as they were.
+  - **Leave all**, or **Leave 1** to **10**: it leaves that many of its own cars, the ones next to the coupling, with the cars that were there, and goes on with the rest. Leave all leaves every car on that side, up to the engine: the way to set out a cut on a track that already has cars.
 - **Pick up > 1 to 10 cars, All cars** couples to the nearest standing cars without naming one. It looks on the train's own track first, the one the train is on and the one the previous order went to, out to the first switch; then within about 300 m. Cars with a locomotive are left alone. It takes that many and leaves the rest, like Take.
 - **Pick up > Couple back** goes back for the cars this train left last, with Leave cars, Keep or a pick-up, even with other cars nearby. For example: Keep 6 cars, go switch the mill, then Couple back.
 - **Pick up > Couple to the cars left by > Order N** goes back for exactly the cars that order (a Leave cars, Keep, Take or Pick up) left, even if the train has left others since. For example: Leave the last 3 cars, go to another track, Leave the last 2 cars, then Couple to the cars left by order 1. If that order hasn't left its cars yet when it's time, or they're gone, the orders pause and say so. Saved jobs and Copy and Paste keep the link.
@@ -97,6 +102,8 @@ After every coupling the engineer connects the air and releases the handbrakes.
 - **Turn around**: the engine goes onto the bridge, the bridge turns half a circle and the engine comes back off the way it went on, now facing the other way.
 - **Park on Stall N**: the engine parks in that roundhouse stall, front first.
 - **Leave on Lead …** (named after the direction the track leaves in): the engine leaves on that track, front first. Handy to bring an engine out of a stall.
+
+Hover the order and the chosen track (or the bridge, for Turn around) lights up in the world, and on the maps with Map Plus.
 
 The bridge is lined up with the track the engine comes from and turned for you, and the order shows what it's doing ("lining up", "getting on", "turning", "getting off"). It's for an engine on its own, with its tender: with cars coupled or an engine longer than the bridge, the orders pause and say why, so put a **Leave cars** before it. A turntable order carries on where it was after you load a save. A turntable move picked from Goto's **Turntable** menu while the window is open becomes a turntable order.
 
@@ -135,7 +142,11 @@ An order added with Goto's dead-end submenu has a **Smart entrance** box. Checke
 
 ### Settings
 
-**Preferences > Mods** (from the main menu or with Esc) has a **Train Orders** section with **One window for the selected train**, and **QbanRambo's mods** with the update check. The tab is shared with other mods that put their settings there.
+**Preferences > Mods** (from the main menu or with Esc) has a **Train Orders** section with **Air and handbrakes after coupling** and **One window for the selected train**, and **QbanRambo's mods** with the update check. The tab is shared with other mods that put their settings there.
+
+### On the web map
+
+With Map Plus 1.7.0 or later, the web map has the same orders window: select a train and click **Orders** next to Follow, the toolbar's orders button or press O. A panel on the right shows its orders, in sync with the game, with every button of the window: the Add menus, the order settings, Start, Skip, Clear, Copy, Paste and the saved jobs. Hover an order to see the train after it on the web map. While the panel is open, right-click a track to add a trip there, or a car to add a coupling, as the game does with the window open.
 
 ## Limits
 
@@ -152,6 +163,16 @@ Once a session, when a game loads, the mod asks Nexus Mods whether the QbanRambo
 Clear the orders of your locomotives, then disable **Train Orders** in **Mods**, or delete its folder from `Documents\Railroader\Mods`, and restart the game.
 
 ## Changelog
+
+### 1.8.0
+
+- **Go back**: a new order that goes back to an earlier one until a time of day or a number of times, then goes on, so a train can run a job over and over until evening and then refuel and go to the shed.
+- **Set speed**: a new order; the trips after it run at that speed, from 5 mph to the railroad's limit, until another one, for work trains that crawl over a stretch.
+- **Couplings, Then**: after coupling, **Take none** uncouples right away, and **Leave all** or **Leave 1** to **10** leave the train's own cars with the cars that were there, besides Take all and Take 1 to 10.
+- **Air and handbrakes after any coupling**: coupling with the game's waypoint tool while the window is closed now connects the air and releases the handbrakes too. An option in Preferences > Mods, on by default.
+- **Turntable orders**: hovering one lights its track in the world, and on the maps with Map Plus.
+- **On the web map**: with Map Plus 1.7.0, the whole orders window is on the web map too, in sync with the game.
+- **Settings in Preferences > Mods** have a cleaner layout: each checkbox first, with its full name beside it.
 
 ### 1.7.0
 

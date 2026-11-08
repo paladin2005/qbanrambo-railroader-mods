@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text;
 using HarmonyLib;
@@ -23,6 +24,10 @@ internal sealed class WebMap : MonoBehaviour
   private const string Place = Root + "/api/place";
   private const string Select = Root + "/api/select";
   private const string FuseeApi = Root + "/api/fusee";
+  private const string SendApi = Root + "/api/send";
+  private const string CoupleApi = Root + "/api/couple";
+  private const string TeleportApi = Root + "/api/teleport";
+  private const string OrdersApi = Root + "/api/orders";
 
   private static readonly FieldInfo ServerField = AccessTools.Field(typeof(GameServer), "_httpServer");
 
@@ -52,13 +57,38 @@ internal sealed class WebMap : MonoBehaviour
     { Root + "/api/segments", WebTrackInfo.Build }
   };
 
+  private const float PageVersionSeconds = 5f;
+
   private static WebMap _shared;
+  private static string _pageVersion = "";
+  private static float _pageVersionAt = float.MinValue;
 
   private string _directory;
   private HTTPServer _server;
   private readonly List<string> _files = new();
   private float _nextCheck;
   private bool _logged;
+
+  internal static string PageVersion
+  {
+    get
+    {
+      if (Time.unscaledTime - _pageVersionAt < PageVersionSeconds) return _pageVersion;
+      _pageVersionAt = Time.unscaledTime;
+      try
+      {
+        var directory = _shared != null ? _shared._directory : null;
+        if (directory != null && Directory.Exists(directory))
+        {
+          _pageVersion = Directory.GetFiles(directory, "*", SearchOption.AllDirectories).Select(File.GetLastWriteTimeUtc).DefaultIfEmpty().Max().Ticks.ToString();
+        }
+      }
+      catch (Exception)
+      {
+      }
+      return _pageVersion;
+    }
+  }
 
   internal static void Start(string modDirectory)
   {
@@ -146,6 +176,10 @@ internal sealed class WebMap : MonoBehaviour
     server.RegisterHttpGetHandler(Place, (request, response) => ServeJson(response, () => WebPlaces.Detail(request.Headers[WebPlaces.Header])));
     server.RegisterHttpGetHandler(Select, (request, response) => ServeJson(response, () => WebMapData.Select(request.Headers[WebTrain.Header])));
     server.RegisterHttpGetHandler(FuseeApi, (request, response) => ServeJson(response, () => WebMapData.Fusee(request.Headers["X-Map-Plus-Point"], request.Headers["X-Map-Plus-Action"], request.Headers["X-Map-Plus-Fusee"])));
+    server.RegisterHttpGetHandler(OrdersApi, (request, response) => ServeJson(response, () => WebMapData.Orders(request.Headers[WebTrain.Header], request.Headers["X-Map-Plus-Action"], request.Headers["X-Map-Plus-Args"])));
+    server.RegisterHttpGetHandler(SendApi, (request, response) => ServeJson(response, () => WebMapData.Send(request.Headers[WebTrain.Header], request.Headers["X-Map-Plus-Point"])));
+    server.RegisterHttpGetHandler(TeleportApi, (request, response) => ServeJson(response, () => WebMapData.Teleport(request.Headers["X-Map-Plus-Point"], request.Headers["X-Map-Plus-Car"])));
+    server.RegisterHttpGetHandler(CoupleApi, (request, response) => ServeJson(response, () => WebMapData.Couple(request.Headers[WebTrain.Header], request.Headers["X-Map-Plus-Car"], request.Headers["X-Map-Plus-Queue"] == "1")));
     server.RegisterService(new ServiceInfo("Map Plus", "A live map of your railroad, its trains and signals, for a second monitor.", Root, SessionRequirements.GameSession));
     MapPlusMod.Log?.Info($"Web map ready at http://localhost:{server.Port}{Root}");
   }
@@ -162,6 +196,10 @@ internal sealed class WebMap : MonoBehaviour
       _server.UnregisterHttpGetHandler(Place);
       _server.UnregisterHttpGetHandler(Select);
       _server.UnregisterHttpGetHandler(FuseeApi);
+      _server.UnregisterHttpGetHandler(SendApi);
+      _server.UnregisterHttpGetHandler(CoupleApi);
+      _server.UnregisterHttpGetHandler(TeleportApi);
+      _server.UnregisterHttpGetHandler(OrdersApi);
     }
     catch (Exception exception)
     {
@@ -222,6 +260,7 @@ internal sealed class WebMap : MonoBehaviour
 
   private static void Fail(HttpResponse response, Exception exception, string what)
   {
+    if (ClientGone(exception)) return;
     MapPlusMod.Log?.Error(exception, $"Couldn't serve {what}");
     try
     {
@@ -230,6 +269,15 @@ internal sealed class WebMap : MonoBehaviour
     catch (Exception)
     {
     }
+  }
+
+  private static bool ClientGone(Exception exception)
+  {
+    for (var inner = exception; inner != null; inner = inner.InnerException)
+    {
+      if (inner is IOException || inner is System.Net.Sockets.SocketException || inner is ObjectDisposedException) return true;
+    }
+    return false;
   }
 
   private static void Send(HttpResponse response, int status, string type, byte[] body)

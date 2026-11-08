@@ -7,6 +7,7 @@ const ROUTES_MS = 1000;
 const DETAILS_MS = 2000;
 const TERRAIN_MS = 1000;
 const MIN_SCALE = 0.004;
+const ORDER_MERGE = 8;
 const MAX_SCALE = 30;
 const FONT = '-apple-system, "Segoe UI", Roboto, sans-serif';
 const CLASS_COLORS = ['#FF5280', '#C773FF', '#598CFF', '#33CCEB', '#4DDB6B'];
@@ -51,6 +52,7 @@ const SMALL_PLACE_SCALE = 0.08;
 const FUEL_SCALE = 0.15;
 const COUNT_SCALE = 0.1;
 const NAME_SCALE = 0.35;
+const MAP_LABEL_SCALE = 0.1;
 const COMING_COLOR = '#F1B827';
 const RIDER_COLOR = '#8CC8FF';
 const FILTERS = [
@@ -106,7 +108,7 @@ const UNLINKED = '<path d="M11 6.5l1.5-1.5a3.5 3.5 0 0 1 5 5L16 11.5"/><path d="
 
 const saved = load();
 const view = { x: saved.x ?? 0, z: saved.z ?? 0, scale: saved.scale ?? 0.1 };
-const layers = Object.assign({ terrain: true, classes: false, places: true, signals: true, fusees: true, labels: true, alerts: true, hiddenKinds: [] }, saved.layers || {});
+const layers = Object.assign({ terrain: true, classes: false, condition: false, industry: true, mainline: true, names: true, limits: false, places: true, route: true, destinations: true, orders: true, signals: true, fusees: true, cars: true, labels: true, alerts: true, hiddenKinds: [] }, saved.layers || {});
 let fitted = saved.scale !== undefined;
 let selected = saved.selected || null;
 let selectedIndustry = null;
@@ -115,7 +117,15 @@ let selectedFuel = null;
 let industryPath = { key: '', path: null };
 let segmentInfo = null;
 let panelInfo = null;
+let orderHits = [];
+let highlight = null;
+let highlightPath = { key: '', path: null };
+let highlightArrow = null;
+let conditionPaths = { key: null, degraded: null, severe: null };
+let destinationPaths = { key: '', coming: null, spotted: null };
 let hoverSegment = -1;
+let pageVersion = null;
+let gamePaths = null;
 let follow = !!saved.follow;
 let sync = saved.sync !== false;
 
@@ -346,7 +356,19 @@ function buildTrack() {
 
 function colorOf(segment) {
   if (layers.classes) return segment.cls > 0 ? CLASS_COLORS[segment.cls - 1] : ROLE_COLORS[0];
-  return ROLE_COLORS[segment.role];
+  return roleHidden(segment.role) ? ROLE_COLORS[0] : ROLE_COLORS[segment.role];
+}
+
+function roleHidden(role) {
+  return (role === 1 && !layers.mainline) || (role === 2 && !layers.industry);
+}
+
+function kindColor(entry) {
+  return !layers.classes && roleHidden(entry.role) ? ROLE_COLORS[0] : entry.color;
+}
+
+function showCar(car) {
+  return layers.cars || (car && car[8] === 1);
 }
 
 function entries(map, style) {
@@ -382,6 +404,14 @@ function handleState(data) {
   }
   setStatus(true, 'Live');
   showNotice('');
+  if (data.pv) {
+    if (pageVersion === null) pageVersion = data.pv;
+    else if (data.pv !== pageVersion) {
+      save();
+      location.reload();
+      return;
+    }
+  }
   if (!track || track.version !== data.version) loadTrack();
   const next = new Map();
   for (const car of data.cars) next.set(car[0], car);
@@ -394,6 +424,9 @@ function handleState(data) {
   locoById = new Map(locos.map(loco => [loco.i, loco]));
   signals = data.signals;
   fusees = data.fl || [];
+  highlight = data.hl || null;
+  gamePaths = data.gp || null;
+  setOrdersSupport(typeof data.to === 'number' ? data.to : data.to ? 2 : 0);
   switchState = track && data.sv === track.version ? data.sw || '' : '';
   updateMotion(now / 1000);
   followGameSelection(data.sel || null);
@@ -734,7 +767,7 @@ function frame(time) {
       view.z += dz * 0.2;
     }
   }
-  const key = [view.x, view.z, view.scale, width, height, dpr, layers.terrain, layers.classes, terrain.revision, trackRevision, switchState].join('|');
+  const key = [view.x, view.z, view.scale, width, height, dpr, layers.terrain, layers.classes, layers.industry, layers.mainline, layers.names, layers.limits, terrain.revision, trackRevision, switchState].join('|');
   if (key !== backdropKey) {
     backdropKey = key;
     drawBackdrop();
@@ -744,16 +777,24 @@ function frame(time) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const group = selectedGroup();
   const chosen = highlights(group);
+  drawCondition(ctx);
+  drawDestinations(ctx);
   drawRoute(ctx, time);
   if (layers.signals) drawSignals(ctx);
   if (layers.fusees) drawFusees(ctx, time);
   drawIndustryTracks(ctx);
+  drawHighlight(ctx, time);
   drawHoverTrack(ctx);
   drawPlaces(ctx);
+  if (track) drawTowns(ctx);
   drawTrails(ctx, t, time / 1000, group);
   drawHeadlights(ctx, t);
   drawCars(ctx, t, time, chosen);
+  drawGamePaths(ctx);
+  drawGhost(ctx);
+  drawOrders(ctx);
   drawTags(ctx, t, group, chosen);
+  drawHighlightArrow(ctx);
   updateLegend();
   updateScale();
   requestAnimationFrame(frame);
@@ -775,7 +816,7 @@ function drawBackdrop() {
     drawSwitches(g);
   }
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  if (track) drawTowns(g);
+  if (track) drawMapLabels(g, townBoxes(g));
 }
 
 function visibleBox(margin) {
@@ -835,10 +876,10 @@ function drawTrackLines(g) {
   strokeWorld(g, paths.unavailable, 'rgba(110, 104, 92, 0.6)', base * 0.6);
   strokeWorld(g, paths.unbuilt, 'rgba(237, 231, 218, 0.45)', base * 0.6, [6, 5]);
   g.lineCap = 'butt';
-  for (const entry of entries(cores, 'tunnel')) strokeWorld(g, entry.path, rgba(entry.color, 0.6), base * ROLE_WIDTHS[entry.role], [7, 5]);
+  for (const entry of entries(cores, 'tunnel')) strokeWorld(g, entry.path, rgba(kindColor(entry), 0.6), base * ROLE_WIDTHS[entry.role], [7, 5]);
   g.lineCap = 'round';
   for (const entry of entries(paths.kinds, 'normal')) strokeWorld(g, entry.path, CASING, base * ROLE_WIDTHS[entry.role] + 2.4);
-  for (const entry of entries(cores, 'normal')) strokeWorld(g, entry.path, entry.color, base * ROLE_WIDTHS[entry.role]);
+  for (const entry of entries(cores, 'normal')) strokeWorld(g, entry.path, kindColor(entry), base * ROLE_WIDTHS[entry.role]);
   g.lineCap = 'butt';
   const offset = Math.max(2.5, 3 / view.scale);
   for (const [style, deck] of [['bridge', '#C9A97A'], ['steel', '#B9C0C7']]) {
@@ -851,7 +892,7 @@ function drawTrackLines(g) {
     for (const entry of bridges) strokeWorld(g, entry.path, CASING, base * ROLE_WIDTHS[entry.role] + 7);
     for (const entry of bridges) strokeWorld(g, entry.path, deck, base * ROLE_WIDTHS[entry.role] + 4.6);
     for (const entry of bridges) strokeWorld(g, entry.path, CASING, base * ROLE_WIDTHS[entry.role] + 1.6);
-    for (const entry of entries(cores, style)) strokeWorld(g, entry.path, entry.color, base * ROLE_WIDTHS[entry.role]);
+    for (const entry of entries(cores, style)) strokeWorld(g, entry.path, kindColor(entry), base * ROLE_WIDTHS[entry.role]);
   }
   g.setLineDash([]);
   g.lineCap = 'round';
@@ -1008,6 +1049,56 @@ function drawSwitches(g) {
   }
 }
 
+function townBoxes(g) {
+  g.font = `600 15px ${FONT}`;
+  return track.towns.map(town => {
+    const w = g.measureText(town.n).width / 2 + 6;
+    const x = sx(town.x);
+    const y = sy(town.z);
+    return { x0: x - w, y0: y - 12, x1: x + w, y1: y + 12 };
+  });
+}
+
+function drawMapLabels(g, taken) {
+  if ((!layers.names && !layers.limits) || !track.labels || view.scale < MAP_LABEL_SCALE) return;
+  g.font = `italic 600 12px ${FONT}`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.lineJoin = 'round';
+  g.lineWidth = 3.5;
+  const lineHeight = 13;
+  for (const [lx, lz, text, angle, dim] of track.labels) {
+    const limit = /^\d+$/.test(String(text).trim());
+    if (limit ? !layers.limits : !layers.names) continue;
+    const x = sx(lx);
+    const y = sy(lz);
+    if (x < -150 || y < -60 || x > width + 150 || y > height + 60) continue;
+    const lines = String(text).split('\n');
+    const half = Math.max(...lines.map(line => g.measureText(line).width)) / 2 + 3;
+    const tall = lines.length * lineHeight / 2 + 2;
+    const radians = -angle * Math.PI / 180;
+    const cos = Math.abs(Math.cos(radians));
+    const sin = Math.abs(Math.sin(radians));
+    const hw = half * cos + tall * sin;
+    const hh = half * sin + tall * cos;
+    const box = { x0: x - hw, y0: y - hh, x1: x + hw, y1: y + hh };
+    if (taken.some(other => box.x0 < other.x1 && box.x1 > other.x0 && box.y0 < other.y1 && box.y1 > other.y0)) continue;
+    taken.push(box);
+    g.save();
+    g.translate(x, y);
+    g.rotate(radians);
+    g.globalAlpha = dim ? 0.5 : 1;
+    g.strokeStyle = 'rgba(16, 14, 10, 0.85)';
+    g.fillStyle = '#E8E1D0';
+    lines.forEach((line, index) => {
+      const ly = (index - (lines.length - 1) / 2) * lineHeight;
+      g.strokeText(line, 0, ly);
+      g.fillText(line, 0, ly);
+    });
+    g.restore();
+  }
+}
+
 function drawTowns(g) {
   g.font = `600 15px ${FONT}`;
   g.textAlign = 'center';
@@ -1016,16 +1107,22 @@ function drawTowns(g) {
   g.lineWidth = 4;
   g.strokeStyle = 'rgba(16, 14, 10, 0.9)';
   g.fillStyle = '#F4EFE4';
+  const pill = view.scale >= COUNT_SCALE ? 56 : 0;
+  const icons = placeHits.map(hit => ({ x0: hit.x - hit.r - 2, y0: hit.y - hit.r - 2, x1: hit.x + hit.r + 2 + (hit.type === 'place' ? pill : 0), y1: hit.y + hit.r + 2 }));
   for (const town of track.towns) {
     const x = sx(town.x);
     const y = sy(town.z);
     if (x < -100 || y < -50 || x > width + 100 || y > height + 50) continue;
-    g.strokeText(town.n, x, y);
-    g.fillText(town.n, x, y);
+    const half = g.measureText(town.n).width / 2 + 2;
+    const clear = dy => !icons.some(box => x - half < box.x1 && x + half > box.x0 && y + dy - 9 < box.y1 && y + dy + 9 > box.y0);
+    const dy = [0, -24, 24, -36, 36, -48, 48].find(clear) ?? 0;
+    g.strokeText(town.n, x, y + dy);
+    g.fillText(town.n, x, y + dy);
   }
 }
 
 function drawRoute(g, time) {
+  if (!layers.route) return;
   const points = routeFor(selected);
   if (!points || points.length < 4) return;
   g.beginPath();
@@ -1037,10 +1134,12 @@ function drawRoute(g, time) {
   g.lineWidth = 10;
   g.setLineDash([]);
   g.stroke();
+  let length = 0;
+  for (let i = 2; i < points.length; i += 2) length += Math.hypot(sx(points[i]) - sx(points[i - 2]), sy(points[i + 1]) - sy(points[i - 1]));
   g.strokeStyle = ROUTE_COLOR;
   g.lineWidth = 6;
   g.setLineDash([16, 12]);
-  g.lineDashOffset = -(time / 1000) * 40;
+  g.lineDashOffset = -length - (time / 1000) * 40;
   g.stroke();
   g.setLineDash([]);
   const x = sx(points[points.length - 2]);
@@ -1063,6 +1162,185 @@ function drawRoute(g, time) {
   g.lineWidth = 4;
   g.strokeText(locoName(selected), x + 24, y - 24);
   g.fillText(locoName(selected), x + 24, y - 24);
+}
+
+function orderGroups() {
+  if (!layers.orders || !selected || !panelInfo || panelInfo.target !== selected || !panelInfo.orders) return [];
+  const orders = panelInfo.orders;
+  const groups = [];
+  orders.steps.forEach((step, index) => {
+    if (!step.p || (step.s === 'done' && !orders.repeat)) return;
+    const entry = { n: index + 1, t: step.t, current: orders.running && step.s === 'current' };
+    const group = groups.find(item => Math.hypot(item.x - step.p[0], item.z - step.p[1]) < ORDER_MERGE);
+    if (group) group.steps.push(entry);
+    else groups.push({ x: step.p[0], z: step.p[1], steps: [entry] });
+  });
+  return groups;
+}
+
+function drawOrders(g) {
+  orderHits = [];
+  for (const group of orderGroups()) {
+    const x = sx(group.x);
+    const y = sy(group.z);
+    if (x < -30 || y < -30 || x > width + 30 || y > height + 30) continue;
+    const current = group.steps.some(step => step.current);
+    const r = current ? 14 : 11;
+    g.beginPath();
+    g.arc(x, y, r + 2, 0, Math.PI * 2);
+    g.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    g.fill();
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fillStyle = current ? '#FFE08C' : '#FFBF61';
+    g.fill();
+    g.font = `bold ${current ? 14 : 12}px ${FONT}`;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillStyle = '#1A140D';
+    g.fillText(group.steps.length > 1 ? `${group.steps[0].n}+` : `${group.steps[0].n}`, x, y + 0.5);
+    orderHits.push({ x, y, r, group });
+  }
+}
+
+function ordersHtml(group) {
+  const lines = group.steps.map(step => `<div class="field${step.current ? ' current' : ''}">${step.n}. ${escapeHtml(step.t)}${step.current ? ' <b>(now)</b>' : ''}</div>`).join('');
+  return `<div class="title">${escapeHtml(locoName(selected) || 'Train')}'s orders</div>${lines}`;
+}
+
+function pathOf(indices) {
+  const path = new Path2D();
+  for (const index of indices) {
+    const segment = segments[index];
+    if (segment) curveTo(path, segment.p);
+  }
+  return path;
+}
+
+function drawCondition(g) {
+  if (!layers.condition || !paths || !track || !segmentInfo || segmentInfo.sv !== track.version) return;
+  if (conditionPaths.key !== segmentInfo) {
+    const degraded = [];
+    const severe = [];
+    segmentInfo.s.forEach((info, index) => {
+      if (!info || !info[5] || !segments[index] || segments[index].state !== 0) return;
+      (info[5] === 2 ? severe : degraded).push(index);
+    });
+    conditionPaths = { key: segmentInfo, degraded: pathOf(degraded), severe: pathOf(severe) };
+  }
+  worldTransform(g);
+  g.lineCap = 'butt';
+  const width = trackWidth() + 3;
+  strokeWorld(g, conditionPaths.degraded, '#F2C230', width);
+  strokeWorld(g, conditionPaths.severe, '#C2562B', width);
+  g.setLineDash([]);
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function drawDestinations(g) {
+  if (!layers.destinations || !paths || !track || !selected || !panelInfo || panelInfo.target !== selected || !panelInfo.dsg) return;
+  const dsg = panelInfo.dsg;
+  if (!dsg.c.length && !dsg.s.length) return;
+  const key = `${selected}|${track.version}|${dsg.c.join(',')}|${dsg.s.join(',')}`;
+  if (destinationPaths.key !== key) destinationPaths = { key, coming: pathOf(dsg.c), spotted: pathOf(dsg.s) };
+  worldTransform(g);
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  const width = Math.max(trackWidth() + 7, 3.4 * view.scale + 5);
+  strokeWorld(g, destinationPaths.coming, rgba(COMING_COLOR, 0.55), width);
+  strokeWorld(g, destinationPaths.spotted, rgba(SPOTTED_COLOR, 0.55), width);
+  g.setLineDash([]);
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function highlightName() {
+  if (!highlight) return 'Destination';
+  const info = segmentInfo && track && segmentInfo.sv === track.version ? segmentInfo.s[highlight.s[0]] : null;
+  const place = info && info[4] >= 0 ? segmentInfo.pl[info[4]] : null;
+  return place ? place[0] : 'Destination';
+}
+
+function drawHighlight(g, time) {
+  if (!highlight || !paths || !track || !highlight.s.length) return;
+  const key = `${highlight.v}|${track.version}`;
+  if (highlightPath.key !== key) highlightPath = { key, path: pathOf(highlight.s) };
+  const beat = 0.5 + 0.5 * Math.sin(time / 1200 * Math.PI * 2);
+  worldTransform(g);
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  const glow = Math.max(trackWidth() + 6, 2.4 * view.scale + 6) * (0.9 + 0.35 * beat);
+  for (const [spread, alpha] of [[4.2, 0.07], [3, 0.12], [2, 0.22], [1.3, 0.4]]) {
+    strokeWorld(g, highlightPath.path, rgba(highlight.c, alpha * (0.75 + 0.5 * beat)), glow * spread);
+  }
+  strokeWorld(g, highlightPath.path, highlight.c, trackWidth() + 3);
+  strokeWorld(g, highlightPath.path, '#FFFFFF', Math.max(1.2, trackWidth() * 0.45));
+  g.setLineDash([]);
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const x = sx(highlight.x);
+  const y = sy(highlight.z);
+  const phase = (time / 1400) % 1;
+  for (const shift of [0, 0.5]) {
+    const step = (phase + shift) % 1;
+    g.beginPath();
+    g.arc(x, y, 12 + 46 * step, 0, Math.PI * 2);
+    g.strokeStyle = rgba(highlight.c, 0.85 * (1 - step));
+    g.lineWidth = 3;
+    g.stroke();
+  }
+}
+
+function drawHighlightArrow(g) {
+  highlightArrow = null;
+  if (!highlight || !highlight.s.length) return;
+  const x = sx(highlight.x);
+  const y = sy(highlight.z);
+  const margin = 46;
+  if (x >= margin && y >= margin && x <= width - margin && y <= height - margin) return;
+  const cx = width / 2;
+  const cy = height / 2;
+  const dx = x - cx;
+  const dy = y - cy;
+  const reach = Math.min(Math.abs(dx) > 0.01 ? (width / 2 - margin) / Math.abs(dx) : Infinity, Math.abs(dy) > 0.01 ? (height / 2 - margin) / Math.abs(dy) : Infinity);
+  const ax = cx + dx * reach;
+  const ay = cy + dy * reach;
+  const angle = Math.atan2(dy, dx);
+  g.save();
+  g.translate(ax, ay);
+  g.rotate(angle);
+  g.beginPath();
+  g.moveTo(20, 0);
+  g.lineTo(-10, -14);
+  g.lineTo(-4, 0);
+  g.lineTo(-10, 14);
+  g.closePath();
+  g.fillStyle = highlight.c;
+  g.strokeStyle = INK;
+  g.lineWidth = 2;
+  g.shadowColor = highlight.c;
+  g.shadowBlur = 14;
+  g.fill();
+  g.shadowBlur = 0;
+  g.stroke();
+  g.restore();
+  const feet = Math.hypot(highlight.x - view.x, highlight.z - view.z) * 3.28084;
+  const distance = feet >= 1000 ? `${(feet / 5280).toFixed(1)} mi` : `${Math.round(feet)} ft`;
+  const label = `${highlightName()} · ${distance}`;
+  g.font = `bold 12px ${FONT}`;
+  const w = g.measureText(label).width + 16;
+  const lx = clamp(ax - w / 2 - Math.cos(angle) * 40, 6, width - w - 6);
+  const ly = clamp(ay - 11 - Math.sin(angle) * 34, 6, height - 28);
+  g.beginPath();
+  roundRect(g, lx, ly, w, 22, 11);
+  g.fillStyle = 'rgba(22, 19, 14, 0.92)';
+  g.fill();
+  g.strokeStyle = highlight.c;
+  g.lineWidth = 1.5;
+  g.stroke();
+  g.fillStyle = '#F4EFE4';
+  g.textAlign = 'left';
+  g.textBaseline = 'middle';
+  g.fillText(label, lx + 8, ly + 11.5);
+  highlightArrow = { x: ax, y: ay, r: 24 };
 }
 
 function drawFusees(g, time) {
@@ -1153,21 +1431,698 @@ async function fuseeAction(action, x, z, key) {
   }
 }
 
+async function sendHere(train, x, z) {
+  try {
+    const headers = { 'X-Map-Plus-Train': train, 'X-Map-Plus-Point': `${x.toFixed(2)},${z.toFixed(2)}` };
+    const response = await fetch(API + 'send', { cache: 'no-store', headers });
+    const result = await response.json();
+    showToast(result.text || (result.ok ? 'Sent' : 'That didn\'t work'), !result.ok);
+  } catch (error) {
+    showToast("Couldn't reach the game", true);
+  }
+}
+
+const ORDER_ICONS = {
+  goto: '<path d="M12 21s-6-5.6-6-10.5a6 6 0 0 1 12 0C18 15.4 12 21 12 21z"/><circle cx="12" cy="10.5" r="2.2"/>',
+  pickup: '<rect x="3" y="11" width="11" height="6" rx="1"/><path d="M5.5 19.5h.01M11.5 19.5h.01M15 9h6M18 6l3 3-3 3"/>',
+  cut: '<rect x="2" y="9" width="8" height="6" rx="1"/><rect x="14" y="9" width="8" height="6" rx="1"/><path d="M11 12h2"/>',
+  wait: '<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
+  speed: '<path d="M4.6 16.5a8.5 8.5 0 1 1 14.8 0"/><path d="M12 14l4-4.5"/><circle cx="12" cy="14" r="1.4"/>',
+  goback: '<path d="M8 6.5A7 7 0 1 1 5.6 15"/><path d="M8 6.5 4.5 5.5"/><path d="M8 6.5 7.6 10.2"/>',
+  stations: '<circle cx="12" cy="5.5" r="2.5"/><path d="M8 21v-6l-1-4h10l-1 4v6"/>',
+  refuel: '<path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"/>',
+  turntable: '<circle cx="12" cy="12" r="8"/><path d="M5 12h14"/><circle cx="12" cy="12" r="1.5"/>',
+  up: '<path d="M6 15l6-6 6 6"/>',
+  down: '<path d="M6 9l6 6 6-6"/>',
+  trash: '<path d="M4 7h16M10 7V4h4v3M6 7l1 13h10l1-13"/>',
+  copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
+  paste: '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9z"/>'
+};
+
+const ordersPanel = document.getElementById('orders');
+let ordersApi = false;
+let ordersSupport = 0;
+const ORDERS_API = 1;
+const UPDATE_ORDERS = 'Update Train Orders to edit its orders from the web map';
+let ordersOpen = false;
+let ordersTrain = null;
+let ordersView = null;
+let ordersTab = 'orders';
+let ordersMenu = null;
+let ordersMenus = [];
+let menuHover = null;
+let jobDraft = null;
+let ghostIndex = null;
+let ghost = null;
+const GHOST_COLOR = '#40D9FF';
+const STRIP_CAR = 16;
+const STRIP_ENGINE = 26;
+const STRIP_GAP = 2;
+const STRIP_ARROW = 14;
+const STRIP_MIN_SCALE = 0.55;
+const SILHOUETTE_KINDS = ['steam', 'diesel', 'tender', 'box', 'hopper', 'tank', 'flat', 'gondola', 'coach', 'caboose', 'other', 'unknown'];
+
+function silhouetteShapes(kind) {
+  const w = kind === 'steam' || kind === 'diesel' ? 88 : 52;
+  const wheels = [['c', 9, 5, 4], ['c', w - 9, 5, 4]];
+  const coach = [];
+  for (let x = 8; x + 5 < w - 6; x += 9) coach.push(['r', x, 24, x + 5, 31]);
+  switch (kind) {
+    case 'steam':
+      return { w, fill: [['rr', 12, 14, 64, 30, 7], ['r', 4, 12, 15, 31], ['r', 11, 29, 18, 38], ['r', 34, 29, 42, 35], ['r', 62, 9, 84, 36], ['r', 60, 35, 86, 39], ['r', 2, 7, 86, 11], ['c', 22, 7, 6], ['c', 37, 7, 6], ['c', 52, 7, 6], ['c', 75, 5, 4]], cut: [] };
+    case 'diesel':
+      return { w, fill: [['r', 2, 8, 86, 12], ['r', 4, 12, 15, 27], ['r', 14, 12, 33, 37], ['r', 32, 12, 84, 30], ['c', 14, 5, 4], ['c', 25, 5, 4], ['c', 63, 5, 4], ['c', 74, 5, 4]], cut: [['r', 18, 27, 29, 33]] };
+    case 'tender':
+      return { w, fill: [['r', 3, 9, w - 3, 28], ['rr', 8, 26, w - 8, 33, 3], ...wheels], cut: [] };
+    case 'box':
+      return { w, fill: [['r', 2, 9, w - 2, 37], ...wheels], cut: [['r', w / 2 - 1, 13, w / 2 + 1, 33]] };
+    case 'hopper':
+      return { w, fill: [['p', 2, 36, w - 2, 36, w - 2, 22, w / 2 + 7, 10, w / 2 - 7, 10, 2, 22], ...wheels], cut: [] };
+    case 'tank':
+      return { w, fill: [['r', 3, 9, w - 3, 13], ['rr', 2, 12, w - 2, 30, 9], ['r', w / 2 - 5, 28, w / 2 + 5, 35], ...wheels], cut: [] };
+    case 'flat':
+      return { w, fill: [['r', 1, 10, w - 1, 16], ...wheels], cut: [] };
+    case 'gondola':
+      return { w, fill: [['r', 2, 9, w - 2, 24], ...wheels], cut: [] };
+    case 'coach':
+      return { w, fill: [['rr', 2, 9, w - 2, 37, 6], ...wheels], cut: coach };
+    case 'caboose':
+      return { w, fill: [['r', 3, 9, w - 3, 30], ['r', w / 2 - 9, 29, w / 2 + 9, 39], ...wheels], cut: [] };
+    case 'unknown':
+      return { w, fill: [['rr', 2, 9, w - 2, 37, 4], ...wheels], cut: [['rr', 6, 13, w - 6, 33, 2]] };
+    default:
+      return { w, fill: [['rr', 2, 9, w - 2, 34, 4], ...wheels], cut: [] };
+  }
+}
+
+function silhouetteSvg(kind) {
+  const h = 40;
+  const { w, fill, cut } = silhouetteShapes(kind);
+  const shape = ([type, ...v]) => {
+    if (type === 'r') return `<rect x="${v[0]}" y="${h - v[3]}" width="${v[2] - v[0]}" height="${v[3] - v[1]}"/>`;
+    if (type === 'rr') return `<rect x="${v[0]}" y="${h - v[3]}" width="${v[2] - v[0]}" height="${v[3] - v[1]}" rx="${v[4]}"/>`;
+    if (type === 'c') return `<circle cx="${v[0]}" cy="${h - v[1]}" r="${v[2]}"/>`;
+    const points = [];
+    for (let i = 0; i < v.length; i += 2) points.push(`${v[i]},${h - v[i + 1]}`);
+    return `<polygon points="${points.join(' ')}"/>`;
+  };
+  const mask = cut.length ? `<mask id="m"><rect width="${w}" height="${h}" fill="#fff"/><g fill="#000">${cut.map(shape).join('')}</g></mask>` : '';
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${mask}<g fill="#fff"${cut.length ? ' mask="url(#m)"' : ''}>${fill.map(shape).join('')}</g></svg>`;
+}
+
+function installSilhouettes() {
+  const style = document.createElement('style');
+  style.textContent = SILHOUETTE_KINDS.map(kind => {
+    const url = `url("data:image/svg+xml,${encodeURIComponent(silhouetteSvg(kind))}")`;
+    return `.orders-panel .strip .strip-car i.${kind}{-webkit-mask-image:${url};mask-image:${url}}`;
+  }).join('\n');
+  document.head.appendChild(style);
+}
+
+installSilhouettes();
+
+async function loadGhost(index) {
+  const train = ordersTrain;
+  const result = await ordersCall('ghost', { index });
+  if (ghostIndex !== index || ordersTrain !== train) return;
+  ghost = result && result.ok && Array.isArray(result.cars) && result.cars.length ? { index, train, cars: result.cars } : null;
+}
+
+function setGhost(index) {
+  if (index === ghostIndex) return;
+  ghostIndex = index;
+  ghost = null;
+  if (index !== null && ordersOpen && ordersTrain) loadGhost(index);
+}
+
+function drawGamePaths(g) {
+  if (!gamePaths || !gamePaths.length) return;
+  const wide = Math.max(MIN_CAR_PIXELS, CAR_WIDTH * view.scale);
+  g.lineJoin = 'round';
+  g.lineCap = 'butt';
+  for (const path of gamePaths) {
+    const p = path.p;
+    if (p.length < 4) continue;
+    g.beginPath();
+    for (let i = 0; i + 1 < p.length; i += 2) {
+      const x = sx(p[i]);
+      const y = sy(p[i + 1]);
+      if (i) g.lineTo(x, y);
+      else g.moveTo(x, y);
+    }
+    g.strokeStyle = 'rgba(6, 28, 36, 0.8)';
+    g.lineWidth = wide + 3;
+    g.stroke();
+    g.strokeStyle = rgba(path.c, 0.72);
+    g.lineWidth = wide;
+    g.stroke();
+  }
+}
+
+function drawGhost(g) {
+  if (!ghost || !ordersOpen || ghost.train !== ordersTrain || ghost.index !== ghostIndex) return;
+  const wide = Math.max(MIN_CAR_PIXELS, CAR_WIDTH * view.scale);
+  g.lineJoin = 'round';
+  g.lineCap = 'butt';
+  for (const car of ghost.cars) {
+    const p = car.p;
+    const points = [];
+    for (let i = 0; i + 1 < p.length; i += 2) points.push([sx(p[i]), sy(p[i + 1])]);
+    if (points.length < 2) continue;
+    g.beginPath();
+    points.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+    g.shadowColor = GHOST_COLOR;
+    g.shadowBlur = 10;
+    g.strokeStyle = 'rgba(6, 28, 36, 0.8)';
+    g.lineWidth = wide + 3;
+    g.stroke();
+    g.shadowBlur = 0;
+    g.strokeStyle = rgba(GHOST_COLOR, 0.72);
+    g.lineWidth = wide;
+    g.stroke();
+    if (!car.e) continue;
+    const [ax, ay] = points[0];
+    const [bx, by] = points[points.length - 1];
+    const length = Math.hypot(bx - ax, by - ay);
+    if (length < wide) continue;
+    const ux = (bx - ax) / length;
+    const uy = (by - ay) / length;
+    const [cx, cy] = points[Math.floor(points.length / 2)];
+    const size = wide * 0.32;
+    g.beginPath();
+    g.moveTo(cx - ux * size - uy * size, cy - uy * size + ux * size);
+    g.lineTo(cx + ux * size, cy + uy * size);
+    g.lineTo(cx - ux * size + uy * size, cy - uy * size - ux * size);
+    g.strokeStyle = 'rgba(6, 28, 36, 0.9)';
+    g.lineWidth = Math.max(1.5, wide * 0.16);
+    g.lineCap = 'round';
+    g.stroke();
+    g.lineCap = 'butt';
+  }
+}
+
+function icon(name) {
+  return `<svg viewBox="0 0 24 24">${ORDER_ICONS[name] || ''}</svg>`;
+}
+
+function plainText(text) {
+  return String(text || '').replace(/<[^>]*>/g, '');
+}
+
+async function ordersCall(action, args) {
+  const train = ordersTrain;
+  if (!train) return null;
+  const headers = { 'X-Map-Plus-Train': train, 'X-Map-Plus-Action': action };
+  if (args) headers['X-Map-Plus-Args'] = encodeURIComponent(JSON.stringify(args));
+  try {
+    const response = await fetch(API + 'orders', { cache: 'no-store', headers });
+    const result = await response.json();
+    return ordersTrain === train ? result : null;
+  } catch (error) {
+    return { ok: false, text: "Couldn't reach the game" };
+  }
+}
+
+async function ordersAction(action, args) {
+  const result = await ordersCall(action, args);
+  if (!result) return;
+  if (result.text) showToast(result.text, !result.ok);
+  if (result.rows) {
+    ordersView = checkedView(result);
+    renderOrders();
+  }
+}
+
+async function refreshOrders() {
+  const result = await ordersCall('view');
+  if (!result || !ordersOpen) return;
+  if (result.rows) ordersView = checkedView(result);
+  else ordersView = { error: result.text || "Couldn't read the orders" };
+  if (!ordersBusy()) renderOrders();
+  if (ghostIndex !== null) loadGhost(ghostIndex);
+}
+
+function ordersBusy() {
+  const active = document.activeElement;
+  return !!ordersMenu || (active && ordersPanel.contains(active) && (active.tagName === 'SELECT' || active.tagName === 'INPUT'));
+}
+
+async function ordersLoop() {
+  for (;;) {
+    if (ordersOpen) {
+      if (selected !== ordersTrain) {
+        ordersTrain = selected;
+        ordersView = null;
+        jobDraft = null;
+        setGhost(null);
+        hideOrdersMenu();
+        renderOrders();
+      }
+      if (ordersTrain && !ordersBusy()) await refreshOrders();
+    }
+    await sleep(1000);
+  }
+}
+
+function setOrdersOpen(open) {
+  ordersOpen = open && ordersApi;
+  ordersPanel.classList.toggle('hidden', !ordersOpen);
+  document.body.classList.toggle('orders-open', ordersOpen);
+  document.querySelector('[data-action="orders"]').classList.toggle('on', ordersOpen);
+  hideOrdersMenu();
+  setGhost(null);
+  if (!ordersOpen) return;
+  ordersTrain = selected;
+  ordersView = null;
+  jobDraft = null;
+  renderOrders();
+  if (ordersTrain) refreshOrders();
+}
+
+function setOrdersSupport(level) {
+  if (ordersSupport === level) return;
+  ordersSupport = level;
+  ordersApi = level === 2;
+  document.querySelector('[data-action="orders"]').classList.toggle('hidden', level === 0);
+  if (!ordersApi && ordersOpen) setOrdersOpen(false);
+  if (selected) renderPanel();
+}
+
+function toggleOrders() {
+  if (ordersSupport === 1) {
+    showToast(UPDATE_ORDERS, true);
+    return;
+  }
+  if (!selected && !ordersOpen) showToast('Select a train first');
+  setOrdersOpen(!ordersOpen);
+}
+
+function checkedView(result) {
+  return (result.api || 0) >= ORDERS_API ? result : { error: UPDATE_ORDERS };
+}
+
+function stripIsEngine(car) {
+  return car.k === 'steam' || car.k === 'diesel' || car.k === 'tender';
+}
+
+function stripCarWidth(car) {
+  return car.k === 'steam' || car.k === 'diesel' ? STRIP_ENGINE : STRIP_CAR;
+}
+
+function stripCountWidth(count) {
+  return `+${count}`.length * 6.5 + 6;
+}
+
+function stripMeasure(cars, tokens) {
+  let total = 0;
+  for (const token of tokens) total += (token.hidden ? stripCountWidth(token.hidden) : stripCarWidth(cars[token.index])) + STRIP_GAP;
+  return total - STRIP_GAP;
+}
+
+function stripCollapse(cars, context, tight) {
+  const same = (i, index) => i >= 0 && i < cars.length && !!cars[i].n === !!cars[index].n && !!cars[i].l === !!cars[index].l && !stripIsEngine(cars[i]);
+  const edge = index => {
+    let before = 0;
+    while (same(index - before - 1, index)) before++;
+    let after = 0;
+    while (same(index + after + 1, index)) after++;
+    return Math.min(before, after);
+  };
+  const keep = new Array(cars.length).fill(false);
+  cars.forEach((car, i) => {
+    if (!stripIsEngine(car) && !car.n && !car.l) return;
+    if (tight && !stripIsEngine(car) && edge(i) >= 2) return;
+    for (let j = Math.max(0, i - context); j <= Math.min(cars.length - 1, i + context); j++) keep[j] = true;
+  });
+  const tokens = [];
+  let hidden = 0;
+  cars.forEach((car, i) => {
+    if (!keep[i]) {
+      hidden++;
+      return;
+    }
+    if (hidden) tokens.push({ hidden });
+    hidden = 0;
+    tokens.push({ index: i });
+  });
+  if (hidden) tokens.push({ hidden });
+  return tokens;
+}
+
+function stripFit(cars, width) {
+  const all = cars.map((car, index) => ({ index }));
+  if (stripMeasure(cars, all) <= width) return { tokens: all, scale: 1 };
+  for (let context = 2; context >= 0; context--) {
+    const tokens = stripCollapse(cars, context, false);
+    if (stripMeasure(cars, tokens) <= width) return { tokens, scale: 1 };
+  }
+  const tokens = stripCollapse(cars, 0, true);
+  const measured = stripMeasure(cars, tokens);
+  return { tokens, scale: measured > width ? Math.max(STRIP_MIN_SCALE, width / measured) : 1 };
+}
+
+function stripSide() {
+  const scroller = ordersPanel.querySelector('[data-orders-scroll]');
+  const width = scroller && scroller.clientWidth > 100 ? scroller.clientWidth - 8 : 380;
+  return Math.max(60, (width - 16 - STRIP_ARROW) / 2);
+}
+
+function stripHtml(strip, side) {
+  const cars = list => {
+    const { tokens, scale } = stripFit(list, side);
+    return tokens.map(token => {
+      if (token.hidden) return `<span class="more" style="width:${stripCountWidth(token.hidden)}px">+${token.hidden}</span>`;
+      const car = list[token.index];
+      return `<span class="strip-car${car.n ? ' new' : ''}${car.l ? ' leaving' : ''}" style="width:${(stripCarWidth(car) * scale).toFixed(1)}px;margin-right:${(STRIP_GAP * scale).toFixed(1)}px"><i class="${SILHOUETTE_KINDS.includes(car.k) ? car.k : 'other'}" style="background:${car.c}"></i></span>`;
+    }).join('');
+  };
+  const arrow = '<svg viewBox="0 0 28 48"><polygon points="3,44 11,44 25,24 11,4 3,4 17,24"/></svg>';
+  return `<div class="strip${strip.p ? ' problem' : ''}" title="${escapeHtml(plainText(strip.tip))}"><span class="side" style="width:${side.toFixed(1)}px">${cars(strip.b)}</span><span class="arrow">${arrow}</span><span class="side" style="width:${side.toFixed(1)}px">${cars(strip.a)}</span></div>`;
+}
+
+function controlHtml(control, index) {
+  if (control.k === 'smart') {
+    return `<label class="order-control"><input type="checkbox" data-orders-smart="${index}"${control.v ? ' checked' : ''}>${escapeHtml(control.l)}</label>`;
+  }
+  if (control.k === 'time') {
+    const hour = Math.floor(control.v / 60);
+    const minute = control.v % 60;
+    const hours = control.hours.map((label, value) => `<option value="${value}"${value === hour ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('');
+    const minutes = control.minutes.map(value => `<option value="${value}"${value === minute ? ' selected' : ''}>:${String(value).padStart(2, '0')}</option>`).join('');
+    return `<label class="order-control">${escapeHtml(control.l)}<select data-orders-time="hour" data-index="${index}">${hours}</select><select data-orders-time="minute" data-index="${index}">${minutes}</select></label>`;
+  }
+  const options = control.o.map(option => `<option value="${escapeHtml(option.v)}"${option.v === control.v ? ' selected' : ''}>${escapeHtml(option.l)}</option>`).join('');
+  return `<label class="order-control">${control.l ? escapeHtml(control.l) : ''}<select data-orders-set="${control.k}" data-index="${index}">${options}</select></label>`;
+}
+
+function ordersBodyHtml(view) {
+  const parts = [];
+  parts.push(kv([['Status', richText(view.status)], ['Engineer', richText(view.engineer)], view.train ? ['Train', richText(view.train)] : null]));
+  const toggle = (key, label, on, hint) => `<label class="switch-row" title="${escapeHtml(hint)}"><span>${label}</span><input type="checkbox" data-orders-toggle="${key}"${on ? ' checked' : ''}><i class="switch"></i></label>`;
+  parts.push(`<div class="toggles">${toggle('repeat', 'Repeat', view.repeat, 'Each order goes back to the end of the list when it\'s done, so the orders run over and over.')}${toggle('pass', 'Smart signals', view.pass, 'In ABS mode, when the train has waited 10 seconds at a red signal at a switch, the engineer passes it at restricted speed, but only when no other train is in the blocks ahead.')}</div>`);
+  parts.push(`<div class="note">While this panel is open, the orders you give from the map (right-click a track or a car) are added to the list, as with the game's Train Orders window open.</div>`);
+  parts.push('<h3>Orders</h3>');
+  const side = stripSide();
+  const rows = view.rows.map((row, index) => {
+    const text = richText(row.t) + (row.d ? ` (${richText(row.d)})` : '');
+    const controls = row.c.map(control => controlHtml(control, index)).join('');
+    return `<div class="order ${row.s}" data-row="${index}"><div class="order-line"><span class="order-text">${text}</span><span class="order-buttons">`
+      + `<button class="icon" data-orders="move" data-index="${index}" data-offset="-1" title="Run this order earlier"${index === 0 ? ' disabled' : ''}>${icon('up')}</button>`
+      + `<button class="icon" data-orders="move" data-index="${index}" data-offset="1" title="Run this order later"${index === view.rows.length - 1 ? ' disabled' : ''}>${icon('down')}</button>`
+      + `<button class="icon" data-orders="remove" data-index="${index}" title="Remove this order">${icon('trash')}</button>`
+      + `</span></div>${controls}${row.f ? stripHtml(row.f, side) : ''}</div>`;
+  }).join('');
+  parts.push(`<div class="scroll" data-orders-scroll>${rows || '<div class="empty">No orders yet</div>'}</div>`);
+  parts.push('<h3>Add</h3>');
+  parts.push(`<div class="add">${view.menus.map(menu => `<button class="icon" data-orders-menu="${menu.id}" title="${escapeHtml(menu.title)}: ${escapeHtml(menu.tip)}">${icon(menu.id)}</button>`).join('')}</div>`);
+  parts.push('<div class="strip-buttons">'
+    + `<button data-orders="run"${view.count ? '' : ' disabled'}>${view.running ? 'Pause' : 'Start'}</button>`
+    + `<button data-orders="skip"${view.finished ? ' disabled' : ''}>Skip</button>`
+    + `<button data-orders="clear"${view.count ? '' : ' disabled'}>Clear</button>`
+    + '<span class="spacer"></span>'
+    + `<button class="icon" data-orders="copy" title="Copy these orders to paste them into another locomotive's orders">${icon('copy')}</button>`
+    + `<button class="icon" data-orders="paste" title="${escapeHtml(view.paste ? `Add the ${view.paste} to the end of these orders` : "Copy another locomotive's orders first")}"${view.paste ? '' : ' disabled'}>${icon('paste')}</button>`
+    + '</div>');
+  return parts.join('');
+}
+
+function jobsBodyHtml(view) {
+  const parts = [];
+  parts.push('<h3>Save these orders</h3>');
+  const name = jobDraft ?? view.jobName ?? '';
+  parts.push(`<div class="job-save"><input type="text" data-job-name maxlength="40" value="${escapeHtml(name)}" placeholder="Job name"><button data-orders="save"${view.count ? '' : ' disabled'} title="${view.count ? 'Save these orders under this name. A saved job with the same name is replaced.' : 'Add some orders first'}">Save</button></div>`);
+  parts.push('<div class="note">Saved jobs are kept outside the save, so any engine in any game can run them. Orders that couple to a car only work where that car is: for jobs you run again, use Pick up, Leave cars and Couple back.</div>');
+  parts.push('<h3>Saved jobs</h3>');
+  const jobs = view.jobs.map(job => `<div class="job" title="${escapeHtml(plainText(job.tip))}"><span>${richText(job.l)}</span>`
+    + `<button data-orders="load" data-name="${escapeHtml(job.n)}"${view.running ? ' disabled title="Pause the orders first"' : ` title="Replace ${escapeHtml(view.name)}'s orders with this job"`}>Load</button>`
+    + `<button data-orders="add" data-name="${escapeHtml(job.n)}" title="Add this job to the end of ${escapeHtml(view.name)}'s orders">Add</button>`
+    + `<button class="icon" data-orders="delete" data-name="${escapeHtml(job.n)}" title="Delete this saved job">${icon('trash')}</button></div>`).join('');
+  parts.push(`<div class="scroll">${jobs || '<div class="empty">No saved jobs yet</div>'}</div>`);
+  return parts.join('');
+}
+
+function renderOrders() {
+  if (!ordersOpen) return;
+  const scroller = ordersPanel.querySelector('[data-orders-scroll]');
+  const scroll = scroller ? scroller.scrollTop : 0;
+  const view = ordersView;
+  const name = view && view.name ? view.name : ordersTrain ? locoName(ordersTrain) || 'Train' : 'No train selected';
+  const parts = [`<header><div class="heading"><h2 class="list">Train Orders</h2><div class="sub">${escapeHtml(name)}</div></div><button class="close" data-orders-close title="Close (O)">×</button></header>`];
+  if (!ordersTrain) parts.push('<div class="empty">Select a train to see and edit its orders.</div>');
+  else if (!view) parts.push('<div class="empty">Loading the orders…</div>');
+  else if (view.error) parts.push(`<div class="empty">${escapeHtml(view.error)}</div>`);
+  else {
+    parts.push(`<div class="tabs"><button data-orders-tab="orders"${ordersTab === 'orders' ? ' class="on"' : ''}>Orders</button><button data-orders-tab="jobs"${ordersTab === 'jobs' ? ' class="on"' : ''}>Saved jobs</button></div>`);
+    parts.push(`<div class="body">${ordersTab === 'orders' ? ordersBodyHtml(view) : jobsBodyHtml(view)}</div>`);
+  }
+  ordersPanel.innerHTML = parts.join('');
+  const next = ordersPanel.querySelector('[data-orders-scroll]');
+  if (next) next.scrollTop = scroll;
+}
+
+async function openOrdersMenu(id, anchor) {
+  const result = await ordersCall('menu', { menu: id, path: [] });
+  if (!result) return;
+  if (!result.ok) {
+    showToast(result.text || "Couldn't open the menu", true);
+    return;
+  }
+  hideOrdersMenu();
+  const menu = ordersView && ordersView.menus ? ordersView.menus.find(item => item.id === id) : null;
+  ordersMenu = { id, anchor, title: menu ? menu.title : '' };
+  addMenuLevel([], result.items, null);
+}
+
+function addMenuLevel(path, items, parentButton) {
+  const level = ordersMenus.length;
+  const el = document.createElement('div');
+  el.className = 'menu orders-menu';
+  const rows = items.map((item, index) => `<button data-menu-item="${index}"${item.d ? ' disabled' : ''}${item.s ? ` title="${escapeHtml(plainText(item.s))}"` : ''}><span class="label">${item.c ? '✓ ' : ''}${richText(item.l)}</span>${item.s ? `<span class="sub">${richText(item.s)}</span>` : ''}${item.sub ? '<span class="more">›</span>' : ''}</button>`).join('');
+  el.innerHTML = (level === 0 ? `<div class="title">${escapeHtml(ordersMenu.title)}</div>` : '') + (rows || '<div class="title">Nothing here</div>');
+  document.body.appendChild(el);
+  const entry = { el, path, items, open: null };
+  ordersMenus.push(entry);
+  const w = el.offsetWidth;
+  const h = el.offsetHeight;
+  let left;
+  let top;
+  if (!parentButton) {
+    const box = ordersMenu.anchor.getBoundingClientRect();
+    left = Math.max(8, Math.min(box.left, window.innerWidth - w - 8));
+    top = box.bottom + 6 + h > window.innerHeight - 8 ? Math.max(8, box.top - h - 6) : box.bottom + 6;
+  } else {
+    const row = parentButton.getBoundingClientRect();
+    const parent = parentButton.closest('.orders-menu').getBoundingClientRect();
+    left = parent.left - w - 2 >= 8 ? parent.left - w - 2 : Math.min(parent.right + 2, window.innerWidth - w - 8);
+    top = Math.max(8, Math.min(row.top - 4, window.innerHeight - h - 8));
+  }
+  el.style.left = `${left}px`;
+  el.style.top = `${top}px`;
+  el.addEventListener('click', event => {
+    const button = event.target.closest('[data-menu-item]');
+    if (!button || button.disabled) return;
+    const index = Number(button.dataset.menuItem);
+    const item = entry.items[index];
+    if (!item) return;
+    if (item.sub) {
+      openSubmenu(entry, index, button);
+      return;
+    }
+    const id = ordersMenu.id;
+    hideOrdersMenu();
+    ordersAction('pick', { menu: id, path: [...entry.path, index] });
+  });
+  el.addEventListener('mouseover', event => {
+    const button = event.target.closest('[data-menu-item]');
+    if (!button) return;
+    clearTimeout(menuHover);
+    const index = Number(button.dataset.menuItem);
+    const item = entry.items[index];
+    menuHover = setTimeout(() => {
+      if (!ordersMenus.includes(entry)) return;
+      if (item && item.sub && !button.disabled) openSubmenu(entry, index, button);
+      else closeDeeper(entry);
+    }, 160);
+  });
+}
+
+async function openSubmenu(entry, index, button) {
+  if (entry.open === index) return;
+  closeDeeper(entry);
+  entry.open = index;
+  button.classList.add('open');
+  const root = ordersMenu;
+  const result = await ordersCall('menu', { menu: root.id, path: [...entry.path, index] });
+  if (!result || ordersMenu !== root || entry.open !== index || ordersMenus[ordersMenus.length - 1] !== entry) return;
+  if (!result.ok) {
+    showToast(result.text || "Couldn't open the menu", true);
+    return;
+  }
+  addMenuLevel([...entry.path, index], result.items, button);
+}
+
+function closeDeeper(entry) {
+  const level = ordersMenus.indexOf(entry);
+  if (level < 0) return;
+  for (const deeper of ordersMenus.splice(level + 1)) deeper.el.remove();
+  entry.open = null;
+  for (const button of entry.el.querySelectorAll('.open')) button.classList.remove('open');
+}
+
+function hideOrdersMenu() {
+  clearTimeout(menuHover);
+  for (const level of ordersMenus) level.el.remove();
+  ordersMenus = [];
+  ordersMenu = null;
+}
+
+window.addEventListener('mousedown', event => {
+  if (ordersMenu && !ordersMenus.some(level => level.el.contains(event.target)) && !event.target.closest('[data-orders-menu]')) hideOrdersMenu();
+});
+
+ordersPanel.addEventListener('click', event => {
+  if (event.target.closest('[data-orders-close]')) {
+    setOrdersOpen(false);
+    return;
+  }
+  const tab = event.target.closest('[data-orders-tab]');
+  if (tab) {
+    ordersTab = tab.dataset.ordersTab;
+    setGhost(null);
+    renderOrders();
+    return;
+  }
+  const menuButton = event.target.closest('[data-orders-menu]');
+  if (menuButton) {
+    if (ordersMenu && ordersMenu.anchor === menuButton) hideOrdersMenu();
+    else openOrdersMenu(menuButton.dataset.ordersMenu, menuButton);
+    return;
+  }
+  const button = event.target.closest('[data-orders]');
+  if (!button || button.disabled) return;
+  const action = button.dataset.orders;
+  const index = Number(button.dataset.index);
+  if (action === 'move') ordersAction('move', { index, offset: Number(button.dataset.offset) });
+  else if (action === 'remove') ordersAction('remove', { index });
+  else if (action === 'run') ordersAction('run', { on: !(ordersView && ordersView.running) });
+  else if (action === 'save') {
+    const input = ordersPanel.querySelector('[data-job-name]');
+    ordersAction('save', { name: input ? input.value : '' });
+    jobDraft = null;
+  } else if (action === 'load' || action === 'add') {
+    ordersTab = 'orders';
+    ordersAction(action, { name: button.dataset.name });
+  } else if (action === 'delete') ordersAction('delete', { name: button.dataset.name });
+  else ordersAction(action);
+});
+
+ordersPanel.addEventListener('change', event => {
+  const target = event.target;
+  if (target.dataset.ordersToggle) {
+    ordersAction(target.dataset.ordersToggle, { on: target.checked });
+  } else if (target.dataset.ordersSet) {
+    ordersAction(target.dataset.ordersSet, { index: Number(target.dataset.index), value: target.value });
+    target.blur();
+  } else if (target.dataset.ordersTime) {
+    const index = Number(target.dataset.index);
+    const hour = ordersPanel.querySelector(`[data-orders-time="hour"][data-index="${index}"]`);
+    const minute = ordersPanel.querySelector(`[data-orders-time="minute"][data-index="${index}"]`);
+    ordersAction('time', { index, value: Number(hour.value) * 60 + Number(minute.value) });
+    target.blur();
+  } else if (target.dataset.ordersSmart !== undefined) {
+    ordersAction('smart', { index: Number(target.dataset.ordersSmart), on: target.checked });
+  }
+});
+
+ordersPanel.addEventListener('mouseover', event => {
+  const row = ordersTab === 'orders' ? event.target.closest('[data-row]') : null;
+  setGhost(row ? Number(row.dataset.row) : null);
+});
+
+ordersPanel.addEventListener('mouseleave', () => setGhost(null));
+
+ordersPanel.addEventListener('input', event => {
+  if (event.target.dataset.jobName !== undefined) jobDraft = event.target.value;
+});
+
 function trackMenu(px, py, hit) {
   const x = wx(px);
   const z = wz(py);
+  const here = { label: 'Teleport here', sub: 'Or Ctrl+click the map', run: () => teleport({ point: `${x.toFixed(2)},${z.toFixed(2)}` }) };
   if (hit && hit.type === 'fusee') {
-    showMenu(px, py, 'Fusee', [{ label: 'Extinguish fusee', run: () => fuseeAction('remove', hit.fusee[0], hit.fusee[1], hit.fusee[2]) }]);
+    showMenu(px, py, 'Fusee', [{ label: 'Extinguish fusee', run: () => fuseeAction('remove', hit.fusee[0], hit.fusee[1], hit.fusee[2]) }, here]);
+    return;
+  }
+  if (hit && hit.type === 'car') {
+    carMenu(px, py, hit);
     return;
   }
   if (!hit || hit.type !== 'track') {
-    hideMenu();
+    showMenu(px, py, 'Map', [here]);
     return;
   }
   const near = nearestFusee(x, z, 20);
-  showMenu(px, py, 'Track', [near
-    ? { label: 'Extinguish fusee', run: () => fuseeAction('remove', near[0], near[1], near[2]) }
-    : { label: 'Place fusee', sub: 'The engineer stops here', run: () => fuseeAction('place', x, z) }]);
+  const train = selected && locoById.has(selected) ? selected : null;
+  showMenu(px, py, 'Track', [
+    train ? sendItem(train, x, z) : { label: 'Send a train here', sub: 'Select a train first', disabled: true },
+    near
+      ? { label: 'Extinguish fusee', run: () => fuseeAction('remove', near[0], near[1], near[2]) }
+      : { label: 'Place fusee', sub: 'The engineer stops here', run: () => fuseeAction('place', x, z) },
+    here]);
+}
+
+function capturing(train) {
+  return !!(train && ordersOpen && ordersTrain === train && ordersView && ordersView.rows);
+}
+
+function sendItem(train, x, z) {
+  return capturing(train)
+    ? { label: `Send ${locoName(train)} here`, sub: 'Added to its orders', run: () => ordersAction('waypoint', { point: `${x.toFixed(2)},${z.toFixed(2)}` }) }
+    : { label: `Send ${locoName(train)} here`, sub: 'The engineer drives the train there', run: () => sendHere(train, x, z) };
+}
+
+function carMenu(px, py, hit) {
+  const car = hit.car;
+  const name = `${car[6] || ''} ${car[7] || ''}`.trim() || 'Car';
+  const train = selected && locoById.has(selected) ? selected : null;
+  const trainCar = train ? curr.get(train) : null;
+  const own = !!(trainCar && trainCar[12] && hit.car[12] === trainCar[12]);
+  let item;
+  if (!train) item = { label: `Couple to ${name}`, sub: 'Select a train first', disabled: true };
+  else if (own || hit.id === train) item = { label: `Couple to ${name}`, sub: 'Already in its train', disabled: true };
+  else if (capturing(train)) item = { label: `Couple ${locoName(train)} to ${name}`, sub: 'Added to its orders', run: () => coupleTo(train, hit.id, true) };
+  else item = { label: `Couple ${locoName(train)} to ${name}`, sub: 'The engineer couples to it, then air and handbrakes', run: () => coupleTo(train, hit.id) };
+  const items = [item];
+  const track = hitTrack(px, py);
+  if (train && track && track.type === 'track') items.push(sendItem(train, wx(px), wz(py)));
+  items.push({ label: `Teleport to ${name}`, sub: 'Move your camera to this car', run: () => teleport({ car: hit.id }) });
+  showMenu(px, py, name, items);
+}
+
+async function teleport(target) {
+  try {
+    const headers = {};
+    if (target.car) headers['X-Map-Plus-Car'] = target.car;
+    if (target.point) headers['X-Map-Plus-Point'] = target.point;
+    const response = await fetch(API + 'teleport', { cache: 'no-store', headers });
+    const result = await response.json();
+    showToast(result.text || (result.ok ? 'Teleported' : "That didn't work"), !result.ok);
+  } catch (error) {
+    showToast("Couldn't reach the game", true);
+  }
+}
+
+async function coupleTo(train, car, queue) {
+  try {
+    const headers = { 'X-Map-Plus-Train': train, 'X-Map-Plus-Car': car };
+    if (queue) headers['X-Map-Plus-Queue'] = '1';
+    const response = await fetch(API + 'couple', { cache: 'no-store', headers });
+    const result = await response.json();
+    if (queue && ordersOpen) refreshOrders();
+    showToast(result.text || (result.ok ? 'Coupling' : "That didn't work"), !result.ok);
+  } catch (error) {
+    showToast("Couldn't reach the game", true);
+  }
 }
 
 function signalPoint(signal) {
@@ -1282,6 +2237,7 @@ function drawCars(g, t, time, chosen) {
 function drawSnakes(g, t, chosen) {
   const items = [];
   for (const id of curr.keys()) {
+    if (!showCar(curr.get(id))) continue;
     const pose = carPose(id, t);
     const shape = carShape(pose);
     if (shape.x < -60 || shape.y < -60 || shape.x > width + 60 || shape.y > height + 60) continue;
@@ -1399,6 +2355,7 @@ function drawMarkers(g, t, chosen) {
 function drawBodies(g, t, chosen) {
   const badges = [];
   for (const id of curr.keys()) {
+    if (!showCar(curr.get(id))) continue;
     const pose = carPose(id, t);
     const car = pose.car;
     const shape = carShape(pose);
@@ -1558,12 +2515,18 @@ function hitTag(px, py) {
 }
 
 function hitTest(px, py) {
+  if (highlightArrow && Math.hypot(px - highlightArrow.x, py - highlightArrow.y) <= highlightArrow.r) return { type: 'highlight' };
   const tag = hitTag(px, py);
   if (tag && curr.has(tag)) return { type: 'car', id: tag, car: curr.get(tag) };
+  for (let i = orderHits.length - 1; i >= 0; i--) {
+    const spot = orderHits[i];
+    if (Math.hypot(px - spot.x, py - spot.y) <= spot.r + 3) return { type: 'orders', group: spot.group };
+  }
   const t = mix();
   let best = null;
   let bestDistance = Infinity;
   for (const id of curr.keys()) {
+    if (!showCar(curr.get(id))) continue;
     const shape = carShape(carPose(id, t));
     const dx = px - shape.x;
     const dy = py - shape.y;
@@ -1680,7 +2643,7 @@ function richText(text) {
   let html = '';
   let last = 0;
   let open = 0;
-  const pattern = /<(\/?)(color|b)(?:=([^>]+))?>|<[^>]+>/g;
+  const pattern = /<(\/?)(color|b|alpha)(?:=([^>]+))?>|<[^>]+>/g;
   for (const match of source.matchAll(pattern)) {
     html += escapeHtml(source.slice(last, match.index));
     last = match.index + match[0].length;
@@ -1695,6 +2658,10 @@ function richText(text) {
       open--;
     } else if (match[2] === 'b') {
       html += match[1] ? '</b>' : '<b>';
+    } else if (match[2] === 'alpha' && !match[1]) {
+      const alpha = parseInt((match[3] || '').replace('#', ''), 16);
+      html += `<span style="opacity:${Number.isFinite(alpha) ? (alpha / 255).toFixed(2) : 1}">`;
+      open++;
     }
   }
   html += escapeHtml(source.slice(last));
@@ -1708,6 +2675,16 @@ function showTooltip(hit, px, py) {
   }
   if (hit.type === 'place' || hit.type === 'fuel' || hit.type === 'track') {
     tooltip.innerHTML = hit.type === 'place' ? placeHtml(hit.item) : hit.type === 'fuel' ? fuelHtml(hit.item) : trackHtml(hit.index);
+    placeTooltip(px, py);
+    return;
+  }
+  if (hit.type === 'highlight') {
+    tooltip.innerHTML = `<div class="title">${escapeHtml(highlightName())}</div><div class="meta">Highlighted in the game</div><div class="field">Click to go there</div>`;
+    placeTooltip(px, py);
+    return;
+  }
+  if (hit.type === 'orders') {
+    tooltip.innerHTML = ordersHtml(hit.group);
     placeTooltip(px, py);
     return;
   }
@@ -2095,14 +3072,20 @@ window.addEventListener('mousemove', event => {
   }
   const hit = hitTest(event.clientX, event.clientY);
   hoverSegment = hit && hit.type === 'track' ? hit.index : -1;
-  canvas.classList.toggle('clickable', !!hit && (hit.type === 'car' || hit.type === 'place' || hit.type === 'fuel'));
+  canvas.classList.toggle('clickable', !!hit && (hit.type === 'car' || hit.type === 'place' || hit.type === 'fuel' || hit.type === 'highlight'));
   showTooltip(hit, event.clientX, event.clientY);
 });
 
 window.addEventListener('mouseup', event => {
-  if (drag && !drag.moved && event.target === canvas) {
+  if (drag && !drag.moved && event.target === canvas && (event.ctrlKey || event.metaKey)) {
     const hit = hitTest(event.clientX, event.clientY);
-    if (hit && hit.type === 'car') {
+    if (hit && hit.type === 'car') teleport({ car: hit.id });
+    else teleport({ point: `${wx(event.clientX).toFixed(2)},${wz(event.clientY).toFixed(2)}` });
+  } else if (drag && !drag.moved && event.target === canvas) {
+    const hit = hitTest(event.clientX, event.clientY);
+    if (hit && hit.type === 'highlight') {
+      flyTo(highlight.x, highlight.z, Math.max(view.scale, 0.8));
+    } else if (hit && hit.type === 'car') {
       select(hit.car[8] === 1 ? hit.id : hit.car[12] || selected);
     } else if (hit && hit.type === 'place') {
       selectIndustry(hit.item.i);
@@ -2208,7 +3191,7 @@ function trainHtml(info) {
   const summary = info.summary;
   const parts = [];
   const subtitle = lead ? [lead.model, lead.kind].filter(Boolean).join(' · ') : '';
-  parts.push(`<header>${backButton()}<div class="heading"><h2>${escapeHtml(info.n)}</h2><div class="sub">${escapeHtml(subtitle)}</div></div><button class="follow${follow ? ' on' : ''}" data-follow title="Keep the map on this train (F)">${follow ? 'Following' : 'Follow'}</button><button class="close" data-close title="Close (Esc)">×</button></header>`);
+  parts.push(`<header>${backButton()}<div class="heading"><h2>${escapeHtml(info.n)}</h2><div class="sub">${escapeHtml(subtitle)}</div></div>${ordersSupport ? `<button class="${ordersOpen ? 'on' : ''}" data-orders-open title="${ordersApi ? 'Train Orders (O)' : UPDATE_ORDERS}">Orders</button>` : ''}<button class="follow${follow ? ' on' : ''}" data-follow title="Keep the map on this train (F)">${follow ? 'Following' : 'Follow'}</button><button data-teleport-car="${escapeHtml(selected || '')}" title="Move your camera to this train">Teleport</button><button class="close" data-close title="Close (Esc)">×</button></header>`);
   parts.push('<h3>Status</h3>');
   parts.push(kv([
     ['Speed', `${info.speed} mph${info.moving === 'Stopped' ? ', stopped' : `, ${info.moving.toLowerCase()}`}`],
@@ -2249,6 +3232,12 @@ function trainHtml(info) {
     parts.push('</div>');
   }
   parts.push(`<h3>Consist (${info.consist.length})</h3>`);
+  if (info.riders) {
+    const riders = info.riders;
+    const share = riders.cap > 0 ? ` (${Math.round(100 * riders.n / riders.cap)}%)` : '';
+    const stops = riders.d.map(stop => `${escapeHtml(stop.n)} (${stop.c})`).join(', ');
+    parts.push(`<div class="riders"><div><b>Passengers</b> ${riders.n}/${riders.cap}${share}</div>${stops ? `<div class="sub">To ${stops}</div>` : ''}</div>`);
+  }
   info.consist.forEach((car, index) => {
     const swatch = car.k === 'engine' ? '#F6F1E6' : car.k === 'tender' ? '#B9B1A0' : car.color || '#FFFFFF';
     const badges = [
@@ -2259,8 +3248,8 @@ function trainHtml(info) {
     ].join('');
     const details = [
       [car.model, `${car.len} ft`, `${car.w} tons`, car.cond < 100 ? `condition ${car.cond}%` : null].filter(Boolean).join(' · '),
-      car.load ? `Load: ${car.load}` : car.k === 'car' ? 'Empty' : null,
-      car.dest || (car.k === 'car' ? 'No waybill' : null)
+      car.px ? car.load : car.load ? `Load: ${car.load}` : car.k === 'car' ? 'Empty' : null,
+      car.dest || (car.k === 'car' && !car.px ? 'No waybill' : null)
     ].filter(Boolean);
     parts.push(`<div class="car" data-car="${escapeHtml(car.i)}"><span class="index">${index + 1}</span><i class="swatch" style="background:${swatch}"></i><div><div class="name">${escapeHtml(car.n)}${badges}</div>${details.map(line => `<div class="detail">${escapeHtml(line)}</div>`).join('')}</div></div>`);
   });
@@ -2295,10 +3284,15 @@ function percentOf(value) {
   return Math.round(value <= 1.5 ? value * 100 : value);
 }
 
+function teleportPlaceButton(id, list) {
+  const place = id ? list.find(item => item.i === id) : null;
+  return place ? `<button data-teleport-point="${place.x.toFixed(2)},${place.z.toFixed(2)}" title="Move your camera to this place">Teleport</button>` : '';
+}
+
 function placePanelHtml(info) {
   const category = CATEGORIES[info.k] || CATEGORIES.freight;
   const parts = [];
-  parts.push(`<header>${backButton()}<div class="heading"><h2 class="place">${escapeHtml(info.n)}</h2><div class="sub"><i class="dot" style="background:${category.color}"></i>${escapeHtml(category.label)}${info.t ? ` · ${escapeHtml(info.t)}` : ''}</div></div><button class="close" data-close title="Close (Esc)">×</button></header>`);
+  parts.push(`<header>${backButton()}<div class="heading"><h2 class="place">${escapeHtml(info.n)}</h2><div class="sub"><i class="dot" style="background:${category.color}"></i>${escapeHtml(category.label)}${info.t ? ` · ${escapeHtml(info.t)}` : ''}</div></div>${teleportPlaceButton(selectedIndustry, places.industries)}<button class="close" data-close title="Close (Esc)">×</button></header>`);
   for (const warning of info.w) parts.push(`<div class="alert warn">${richText(warning)}</div>`);
   const overview = [];
   if (info.ct !== null && info.ct !== undefined) overview.push(['Contract', `Tier ${info.ct}${info.nct !== null && info.nct !== undefined && info.nct !== info.ct ? `, tier ${info.nct} from tomorrow` : ''}`]);
@@ -2349,7 +3343,7 @@ function placePanelHtml(info) {
 function fuelPanelHtml(info) {
   const category = CATEGORIES[info.k] || CATEGORIES.water;
   const parts = [];
-  parts.push(`<header>${backButton()}<div class="heading"><h2 class="fuel">${escapeHtml(info.n)}</h2><div class="sub"><i class="dot" style="background:${category.color}"></i>${escapeHtml(category.label)}${info.t ? ` · ${escapeHtml(info.t)}` : ''}</div></div><button class="close" data-close title="Close (Esc)">×</button></header>`);
+  parts.push(`<header>${backButton()}<div class="heading"><h2 class="fuel">${escapeHtml(info.n)}</h2><div class="sub"><i class="dot" style="background:${category.color}"></i>${escapeHtml(category.label)}${info.t ? ` · ${escapeHtml(info.t)}` : ''}</div></div>${teleportPlaceButton(selectedFuel, places.fuel)}<button class="close" data-close title="Close (Esc)">×</button></header>`);
   parts.push('<h3>Stock</h3>');
   parts.push(kv([
     ['In stock', info.s === null ? 'Unlimited' : info.e ? '<span class="danger">Out of stock</span>' : escapeHtml(info.s)],
@@ -2393,6 +3387,21 @@ sidePanel.addEventListener('click', event => {
   }
   if (event.target.closest('[data-back]')) {
     clearSelection();
+    return;
+  }
+  if (event.target.closest('[data-orders-open]')) {
+    toggleOrders();
+    renderPanel();
+    return;
+  }
+  const teleportCar = event.target.closest('[data-teleport-car]');
+  if (teleportCar) {
+    if (teleportCar.dataset.teleportCar) teleport({ car: teleportCar.dataset.teleportCar });
+    return;
+  }
+  const teleportPoint = event.target.closest('[data-teleport-point]');
+  if (teleportPoint) {
+    teleport({ point: teleportPoint.dataset.teleportPoint });
     return;
   }
   if (event.target.closest('[data-follow]')) {
@@ -2690,11 +3699,20 @@ function buildLayers() {
   layersCard.innerHTML = '<h4>Map</h4>'
     + toggle('terrain', 'Terrain', "The terrain's relief, forests, fields and water")
     + toggle('classes', 'Track class', 'Color every track by its class')
+    + toggle('condition', 'Track condition', "The game's yellow and rust stripes on degraded track")
+    + toggle('industry', 'Industry tracks', 'Industry tracks in blue')
+    + toggle('mainline', 'Mainline', 'The mainline in green')
+    + toggle('names', 'Track names', "The names the game's map shows on passing tracks and other tracks")
+    + toggle('limits', 'Speed limits', "The speed limit numbers the game's map shows along the track")
     + '<h4>Show</h4>'
     + toggle('places', 'Places', 'Industries, stations and fuel stops')
     + `<div class="kinds${layers.places ? '' : ' off'}">${kinds}<div class="kind-actions"><button data-all>Show all</button><button data-none>Hide all</button></div></div>`
+    + toggle('route', 'Train route', "The selected train's route to its waypoint")
+    + toggle('destinations', 'Train destinations', "The selected train's destination tracks: amber on the way, green spotted")
+    + toggle('orders', 'Train orders', "The selected train's Train Orders as numbered markers")
     + toggle('signals', 'Signals', "Signals in their aspect's color")
     + toggle('fusees', 'Fusees', 'Fusees on the track, where the engineer stops')
+    + toggle('cars', 'Cars', 'Every car; off leaves only the locomotives')
     + toggle('labels', 'Car numbers', 'Reporting marks on the cars')
     + toggle('alerts', 'Alerts', 'Car and train alerts');
 }
@@ -2704,7 +3722,8 @@ function toggleLayers(open = layersCard.classList.contains('hidden')) {
   if (open) {
     buildLayers();
     const box = button.getBoundingClientRect();
-    layersCard.style.top = `${box.top}px`;
+    layersCard.style.top = `${box.bottom + 8}px`;
+    layersCard.style.left = `${Math.max(12, Math.min(box.left, window.innerWidth - 290))}px`;
     layersCard.classList.remove('hidden');
   } else {
     layersCard.classList.add('hidden');
@@ -2747,6 +3766,7 @@ document.getElementById('toolbar').addEventListener('click', event => {
   else if (action === 'fit') fitView();
   else if (action === 'trains') toggleList();
   else if (action === 'sync') setSync(!sync);
+  else if (action === 'orders') toggleOrders();
   else if (action === 'layers') toggleLayers();
   else if (action === 'fullscreen') {
     if (document.fullscreenElement) document.exitFullscreen();
@@ -2780,6 +3800,8 @@ window.addEventListener('keydown', event => {
   } else if (event.key === 'Escape') {
     if (!menu.classList.contains('hidden')) hideMenu();
     else if (!layersCard.classList.contains('hidden')) toggleLayers(false);
+    else if (ordersMenu) hideOrdersMenu();
+    else if (ordersOpen) setOrdersOpen(false);
     else if (selected || selectedIndustry || selectedFuel) clearSelection();
     else if (listOpen) toggleList(false);
   } else if (key === 'f' && selected) {
@@ -2788,6 +3810,8 @@ window.addEventListener('keydown', event => {
     toggleLayers();
   } else if (key === 't') {
     toggleList();
+  } else if (key === 'o' && ordersSupport) {
+    toggleOrders();
   } else if (key === 'g') {
     setSync(!sync);
   }
@@ -2799,6 +3823,7 @@ setFollow(follow);
 renderSync();
 requestAnimationFrame(frame);
 loop('state', STATE_MS, handleState);
+ordersLoop();
 loop('routes', ROUTES_MS, handleRoutes);
 loop('details', DETAILS_MS, handleDetails);
 panelLoop();
