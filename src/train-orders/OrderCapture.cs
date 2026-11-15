@@ -20,13 +20,16 @@ internal static class OrderCapture
   private const string GotoDeliverKey = "qbanrambo.goto.deliver";
 
   internal const string TurntableHookKey = "qbanrambo.train-orders.turntable";
+  internal const string TurntableFacingHookKey = "qbanrambo.train-orders.turntable-facing";
   internal const string RunAroundHookKey = "qbanrambo.train-orders.runaround";
   internal const string WindowOpenKey = "qbanrambo.train-orders.window-open";
   private const string CapturedKey = "qbanrambo.train-orders.captured";
 
   internal static bool Dispatching;
 
-  internal static readonly Func<object, string, int, bool> TurntableHook = CaptureTurntable;
+  internal static readonly Func<object, string, int, bool> TurntableHook = (target, turntableId, exit) => CaptureTurntable(target, turntableId, exit, false);
+
+  internal static readonly Func<object, string, int, bool, bool> TurntableFacingHook = CaptureTurntable;
 
   internal static readonly Func<object, bool, bool> RunAroundHook = CaptureRunAround;
 
@@ -44,13 +47,13 @@ internal static class OrderCapture
     };
   }
 
-  private static bool CaptureTurntable(object target, string turntableId, int exit)
+  private static bool CaptureTurntable(object target, string turntableId, int exit, bool tenderFirst)
   {
     try
     {
       if (target is not Car locomotive || string.IsNullOrEmpty(turntableId) || !OrdersWindow.IsOpenFor(locomotive)) return false;
       var orders = OrderList.Read(locomotive);
-      orders.Add(OrderStep.Turntable(turntableId, exit < 0 ? null : exit));
+      orders.Add(OrderStep.Turntable(turntableId, exit < 0 ? null : exit, tenderFirst));
       orders.Write(locomotive);
       Toast.Present($"{locomotive.DisplayName}: step {orders.Steps.Count} added to its orders", ToastPosition.Bottom);
       return true;

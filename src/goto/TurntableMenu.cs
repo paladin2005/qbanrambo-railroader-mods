@@ -47,14 +47,34 @@ internal static class TurntableMenu
     {
       items.Add(MenuItem.Action(track.Label, TurntableHighlight.Register(() => Send(locomotive, site, track), track.Segments.ToList()), "Leave on this track, front first"));
     }
+    if (site.Tracks.Count > 0)
+    {
+      var back = Turntables.BackFirst(locomotive);
+      items.Add(MenuItem.Submenu(back, () => GotoMenu.Safe(() => BackItems(locomotive, site, consist, back.ToLowerInvariant())), $"The same tracks, {back.ToLowerInvariant()}"));
+    }
     return items;
   }
 
-  private static void Send(BaseLocomotive locomotive, TurntableSite site, PitTrack goal)
+  private static IReadOnlyList<MenuItem> BackItems(BaseLocomotive locomotive, TurntableSite site, HashSet<Car> consist, string back)
+  {
+    var items = new List<MenuItem>();
+    foreach (var track in site.Tracks.Where(track => track.Stall))
+    {
+      var occupied = Turntables.IsOccupied(track, consist);
+      items.Add(MenuItem.Action(track.Label, TurntableHighlight.Register(() => Send(locomotive, site, track, true), track.Segments.ToList()), occupied ? "Occupied" : $"Park the engine in it, {back}", disabled: occupied));
+    }
+    foreach (var track in site.Tracks.Where(track => !track.Stall))
+    {
+      items.Add(MenuItem.Action(track.Label, TurntableHighlight.Register(() => Send(locomotive, site, track, true), track.Segments.ToList()), $"Leave on this track, {back}"));
+    }
+    return items;
+  }
+
+  private static void Send(BaseLocomotive locomotive, TurntableSite site, PitTrack goal, bool tenderFirst = false)
   {
     try
     {
-      TurntableWatch.Begin(locomotive, site, goal);
+      TurntableWatch.Begin(locomotive, site, goal, tenderFirst);
     }
     catch (Exception exception)
     {

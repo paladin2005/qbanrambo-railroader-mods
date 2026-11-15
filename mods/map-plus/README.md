@@ -185,6 +185,10 @@ Disable **Map Plus** in **Mods**, or delete its folder from `Documents\Railroade
 
 ## Changelog
 
+### 1.7.1
+
+- Train Orders 1.9.0's **Timetable train** orders are described in a train's orders on the web map.
+
 ### 1.7.0
 
 - **Train Orders on the web map**: with Train Orders 1.8.0, the whole orders window in a panel on the right, in sync with the game: Add menus, order settings, Start, Skip, Clear, Copy, Paste and saved jobs; hover an order to see the train after it, and the orders show as numbered markers on the map.

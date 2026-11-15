@@ -3,7 +3,7 @@
   <PropertyGroup>
     <AssemblyName>QbanRambo.Goto</AssemblyName>
     <RootNamespace>QbanRambo.Goto</RootNamespace>
-    <Version>1.7.0</Version>
+    <Version>1.8.0</Version>
     <Product>QbanRambo's Goto</Product>
     <Authors>QbanRambo</Authors>
     <Company>QbanRambo</Company>

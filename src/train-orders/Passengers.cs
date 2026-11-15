@@ -27,7 +27,7 @@ internal static class Passengers
 
   internal static void Keep(Car locomotive, IReadOnlyCollection<string> stations, IReadOnlyCollection<string> listed)
   {
-    if (listed.Count == 0) return;
+    if (listed.Count == 0 || TimetableTrains.Current(locomotive) != null) return;
     var coaches = Coaches(locomotive);
     if (coaches.Count == 0) return;
     var stops = Stops();

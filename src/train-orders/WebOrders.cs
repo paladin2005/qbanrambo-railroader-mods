@@ -26,7 +26,7 @@ internal static class WebOrders
     ("wait", "Wait", "Add a wait: until the cars are loaded or unloaded, until tomorrow, or for some hours."),
     ("goback", "Go back", "Add a loop: go back to an earlier order until a time or a number of times, then go on."),
     ("speed", "Set speed", "Add a speed: the trips after it run at that speed until another Set speed order."),
-    ("stations", "Stations", "Add a stop at a passenger station."),
+    ("stations", "Stations", "Add a stop at a passenger station, or run the train as a train of the game's timetable."),
     ("refuel", "Refuel", "Add a refuel at a water, coal or diesel loader."),
     ("turntable", "Turntable", "Add a turntable move: turn the engine around, park it on a stall or leave on another track. Engines only, no cars.")
   };
@@ -103,8 +103,18 @@ internal static class WebOrders
         case "time":
           OrderActions.SetTime(locomotive, Int(input, "index"), Int(input, "value"));
           break;
+        case "facing":
+          OrderActions.SetTenderFirst(locomotive, Int(input, "index"), Int(input, "value") == 1);
+          break;
+        case "side":
+          var side = Int(input, "value");
+          if (Array.Exists(OrderActions.CoupleSides, option => (int)option.Side == side)) OrderActions.SetSide(locomotive, Int(input, "index"), (CutSide)side);
+          break;
         case "smart":
           OrderActions.SetSmart(locomotive, Int(input, "index"), Bool(input, "on"));
+          break;
+        case "symbol":
+          SetSymbol(locomotive, Int(input, "index"), Str(input, "value"));
           break;
         case "save":
           OrderActions.SaveJob(locomotive, Str(input, "name"));
@@ -154,10 +164,10 @@ internal static class WebOrders
     var hasGoto = AppDomain.CurrentDomain.GetData(GotoMenuKey) is Func<object, IReadOnlyList<MenuItem>>;
     var rows = orders.Steps.Select((step, index) => new
     {
-      t = $"{index + 1}. {OrderActions.RowText(step, orders)}",
+      t = $"{index + 1}. {OrderActions.RowText(step, orders)}{(OrderActions.TimetableNote(locomotive, orders, index) is { } note ? $" ({note})" : "")}",
       s = index < orders.Current ? "done" : index == orders.Current && started ? "current" : "plain",
       d = index == orders.Current ? Progress(locomotive, step) : null,
-      c = Controls(step),
+      c = Controls(locomotive, step),
       f = forecast.Results.TryGetValue(index, out var result) ? ConsistStrip.Web(result) : null
     }).ToList();
     return new
@@ -247,7 +257,7 @@ internal static class WebOrders
     }
   }
 
-  private static List<object> Controls(OrderStep step)
+  private static List<object> Controls(BaseLocomotive locomotive, OrderStep step)
   {
     var controls = new List<object>();
     if (step.Kind == StepKind.Refuel)
@@ -257,6 +267,10 @@ internal static class WebOrders
     if (step.IsCouple)
     {
       controls.Add(new { k = "take", l = "Then", o = OrderActions.TakeOptions().Select(option => new { v = option.Count.ToString(), l = option.Label }).ToList(), v = OrderActions.TakeValue(step).ToString() });
+    }
+    if (step.HasCoupleSide)
+    {
+      controls.Add(new { k = "side", l = "Couple at", o = OrderActions.CoupleSides.Select(option => new { v = ((int)option.Side).ToString(), l = option.Label }).ToList(), v = ((int)step.Side).ToString() });
     }
     if (OrderActions.HasTime(step))
     {
@@ -271,12 +285,28 @@ internal static class WebOrders
     {
       var exits = OrderActions.ExitOptions(Turntables.Find(step.TurntableId));
       controls.Add(new { k = "exit", l = "", o = exits.Select(option => new { v = option.Exit?.ToString() ?? "", l = option.Label }).ToList(), v = step.Exit?.ToString() ?? "" });
+      if (step.Exit.HasValue) controls.Add(new { k = "facing", l = "", o = OrderActions.FacingOptions(locomotive).Select(option => new { v = option.TenderFirst ? "1" : "0", l = option.Label }).ToList(), v = step.TenderFirst ? "1" : "0" });
     }
     if (step.Kind == StepKind.Move && step.Smart.HasValue)
     {
       controls.Add(new { k = "smart", l = "Smart entrance", v = step.Smart == true });
     }
+    if (step.Kind == StepKind.Timetable)
+    {
+      var options = OrderActions.TimetableOptions(step);
+      var choice = OrderActions.TimetableChoice(step, options);
+      controls.Add(new { k = "symbol", l = "Train", o = options.Select(option => new { v = SymbolValue(option.Mode, option.Symbol), l = TimetableTrains.Plain(option.Label) }).ToList(), v = choice >= 0 ? SymbolValue(options[choice].Mode, options[choice].Symbol) : "" });
+    }
     return controls;
+  }
+
+  private static string SymbolValue(int mode, string symbol) => mode == OrderStep.TimetableNext ? "next" : mode == OrderStep.TimetableNone ? "none" : "=" + symbol;
+
+  private static void SetSymbol(BaseLocomotive locomotive, int index, string value)
+  {
+    if (value == "next") OrderActions.SetTimetable(locomotive, index, OrderStep.TimetableNext, null);
+    else if (value == "none") OrderActions.SetTimetable(locomotive, index, OrderStep.TimetableNone, null);
+    else if (value != null && value.StartsWith("=") && value.Length > 1) OrderActions.SetTimetable(locomotive, index, OrderStep.TimetableTrain, value.Substring(1));
   }
 
   private static IReadOnlyList<MenuItem> Root(BaseLocomotive locomotive, string menu)

@@ -14,7 +14,7 @@ internal static class RunAround
   private const float Clearance = 15f;
   private const float SideReach = 1500f;
   private const float BypassReach = 3000f;
-  private const int MaxCandidates = 8;
+  private const int MaxCandidates = 16;
   private const int MaxSegments = 400;
 
   private readonly struct Merge
@@ -59,10 +59,10 @@ internal static class RunAround
       if (car.LocationB.segment != null) blocked.Add(car.LocationB.segment);
     }
     var need = trainLength + Clearance;
-    foreach (var first in Merges(graph, nearMark, SideReach + trainLength))
+    foreach (var first in Merges(graph, nearMark, SideReach + trainLength, blocked))
     {
       if (blocked.Contains(first.Other) || Room(graph, first.Node, first.Enter) < need) continue;
-      foreach (var second in Merges(graph, farMark, SideReach))
+      foreach (var second in Merges(graph, farMark, SideReach, blocked))
       {
         if (second.Node == first.Node || blocked.Contains(second.Other) || Room(graph, second.Node, second.Enter) < need) continue;
         if (!Bypass(graph, first, second, blocked)) continue;
@@ -116,37 +116,49 @@ internal static class RunAround
     return near;
   }
 
-  private static List<Merge> Merges(Graph graph, Location start, float reach)
+  private static List<Merge> Merges(Graph graph, Location start, float reach, HashSet<TrackSegment> blocked)
   {
     var found = new List<Merge>();
     var segment = start.segment;
     if (segment == null) return found;
-    var travelled = start.DistanceUntilEnd();
-    var node = segment.NodeForEnd(start.EndIsA ? TrackSegment.End.B : TrackSegment.End.A);
-    for (var i = 0; i < MaxSegments && node != null && travelled < reach && found.Count < MaxCandidates; i++)
+    var open = new List<(TrackSegment Segment, TrackNode Node, float Travelled)>
     {
-      TrackSegment next;
+      (segment, segment.NodeForEnd(start.EndIsA ? TrackSegment.End.B : TrackSegment.End.A), start.DistanceUntilEnd())
+    };
+    var seen = new HashSet<(TrackSegment, TrackNode)>();
+    for (var i = 0; i < MaxSegments && open.Count > 0 && found.Count < MaxCandidates; i++)
+    {
+      var nearest = 0;
+      for (var j = 1; j < open.Count; j++)
+      {
+        if (open[j].Travelled < open[nearest].Travelled) nearest = j;
+      }
+      var (current, node, travelled) = open[nearest];
+      open.RemoveAt(nearest);
+      if (node == null || travelled >= reach || !seen.Add((current, node))) continue;
+      TrackSegment[] onward;
       if (graph.IsSwitch(node) && graph.DecodeSwitchAt(node, out var enter, out var normal, out var reversed))
       {
-        if (segment == enter)
+        if (current == enter)
         {
-          next = normal;
+          onward = new[] { normal, reversed };
         }
         else
         {
-          found.Add(new Merge(node, segment == normal ? reversed : normal, enter, travelled));
-          next = enter;
+          found.Add(new Merge(node, current == normal ? reversed : normal, enter, travelled));
+          onward = new[] { enter };
         }
       }
       else
       {
-        var others = graph.SegmentsConnectedTo(node).Where(other => other != segment).ToList();
-        next = others.Count == 1 ? others[0] : null;
+        var others = graph.SegmentsConnectedTo(node).Where(other => other != current).ToList();
+        onward = others.Count == 1 ? new[] { others[0] } : Array.Empty<TrackSegment>();
       }
-      if (next == null || !Usable(next)) break;
-      travelled += next.GetLength();
-      segment = next;
-      node = next.GetOtherNode(node);
+      foreach (var next in onward)
+      {
+        if (next == null || !Usable(next) || blocked.Contains(next)) continue;
+        open.Add((next, next.GetOtherNode(node), travelled + next.GetLength()));
+      }
     }
     return found;
   }

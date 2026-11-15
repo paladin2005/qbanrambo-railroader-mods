@@ -219,11 +219,11 @@ internal sealed class Dispatcher : MonoBehaviour
     OrderWaypoint? order;
     if (target != null)
     {
-      order = Pickups.CoupleTo(locomotive, target, out problem);
+      order = Pickups.CoupleTo(locomotive, target, step.Side, out problem);
     }
     else
     {
-      order = Pickups.Nearest(locomotive, Previous(orders), out target, out problem);
+      order = Pickups.Nearest(locomotive, Previous(orders), step.Side, out target, out problem);
       if (order.HasValue && target != null)
       {
         orders.Steps[orders.Current] = step.WithCutCar(target.id);
@@ -352,7 +352,7 @@ internal sealed class Dispatcher : MonoBehaviour
       return;
     }
     if (!locomotive.IsStopped(SettleSeconds)) return;
-    var order = Pickups.CoupleTo(locomotive, car, out var problem);
+    var order = Pickups.CoupleTo(locomotive, car, step.Side, out var problem);
     if (!order.HasValue)
     {
       Pause(locomotive, orders, problem);
@@ -361,7 +361,7 @@ internal sealed class Dispatcher : MonoBehaviour
     Send(locomotive, runner, order.Value);
   }
 
-  private static void StartCoupleBack(BaseLocomotive locomotive, OrderList orders, Runner runner)
+  private static void StartCoupleBack(BaseLocomotive locomotive, OrderList orders, OrderStep step, Runner runner)
   {
     if (orders.LeftCarId == null || !TryGetCar(orders.LeftCarId, out var car) || car.IsInBardo)
     {
@@ -374,7 +374,7 @@ internal sealed class Dispatcher : MonoBehaviour
       return;
     }
     if (!locomotive.IsStopped(SettleSeconds)) return;
-    var order = Pickups.CoupleTo(locomotive, car, out var problem);
+    var order = Pickups.CoupleTo(locomotive, car, step.Side, out var problem);
     if (!order.HasValue)
     {
       Pause(locomotive, orders, problem);
@@ -420,7 +420,7 @@ internal sealed class Dispatcher : MonoBehaviour
       }
     }
     var key = step.Key;
-    runner.Turntable = new TurntableRun(locomotive, site, goal, step.TurntableState, state =>
+    runner.Turntable = new TurntableRun(locomotive, site, goal, step.TenderFirst, step.TurntableState, state =>
     {
       var current = OrderList.Read(locomotive);
       if (current.Finished || current.Steps[current.Current].Key != key) return;
@@ -618,7 +618,7 @@ internal sealed class Dispatcher : MonoBehaviour
         StartPickUp(locomotive, orders, step, runner);
         break;
       case StepKind.CoupleBack:
-        StartCoupleBack(locomotive, orders, runner);
+        StartCoupleBack(locomotive, orders, step, runner);
         break;
       case StepKind.CoupleTo:
         StartCoupleTo(locomotive, orders, step, runner);
@@ -632,7 +632,46 @@ internal sealed class Dispatcher : MonoBehaviour
       case StepKind.GoBack:
         StartGoBack(locomotive, orders, step);
         break;
+      case StepKind.Timetable:
+        StartTimetable(locomotive, orders, step);
+        break;
     }
+  }
+
+  private static void StartTimetable(BaseLocomotive locomotive, OrderList orders, OrderStep step)
+  {
+    if (!TimetableTrains.HasCrew(locomotive))
+    {
+      Pause(locomotive, orders, "No crew: give the engine a crew in Company > Crews to run it as a timetable train");
+      return;
+    }
+    string symbol = null;
+    if (step.Count == OrderStep.TimetableNext)
+    {
+      var next = TimetableTrains.Next(locomotive);
+      if (next == null)
+      {
+        Pause(locomotive, orders, "No timetable train to take next");
+        return;
+      }
+      symbol = next.Name;
+    }
+    else if (step.Count != OrderStep.TimetableNone)
+    {
+      var train = TimetableTrains.Find(step.Symbol);
+      if (train == null)
+      {
+        Pause(locomotive, orders, $"Train {step.Symbol} isn't in the current timetable");
+        return;
+      }
+      symbol = train.Name;
+    }
+    if (TimetableTrains.Current(locomotive)?.Name != symbol)
+    {
+      StateManager.ApplyLocal(new RequestSetTrainCrewTimetableSymbol(locomotive.trainCrewId, symbol));
+      TrainOrdersMod.Log?.Info($"{locomotive.DisplayName}: timetable train {symbol ?? "none"}");
+    }
+    Complete(locomotive, orders);
   }
 
   private static void StartGoBack(BaseLocomotive locomotive, OrderList orders, OrderStep step)

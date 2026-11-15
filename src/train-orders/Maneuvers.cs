@@ -173,6 +173,8 @@ internal static class Maneuvers
     return side == CutSide.Rear ? front : back;
   }
 
+  internal static WaypointEnd EndToward(BaseLocomotive locomotive, CutSide side) => EndAwayFrom(locomotive, side == CutSide.Rear ? CutSide.Front : CutSide.Rear);
+
   internal static bool IsCar(Car car) => car is not BaseLocomotive && !car.CarType.IsTender;
 
   private static void SetAnglecock(Car car, Car.LogicalEnd end, bool open)

@@ -20,6 +20,7 @@ internal sealed class OrdersWindow : BuilderWindowBase
   private const float BelowWidth = 100f;
   private const float ThenWidth = 124f;
   private const float ExitWidth = 200f;
+  private const float TimetableWidth = 300f;
   private const float TimeWidth = 70f;
   private const float RowButtonSpacing = 10f;
   private const float IconButtonSpacing = 4f;
@@ -264,7 +265,8 @@ internal sealed class OrdersWindow : BuilderWindowBase
         {
           var index = i;
           var step = orders.Steps[index];
-          var text = $"{index + 1}. {OrderActions.RowText(step, orders)}";
+          var note = OrderActions.TimetableNote(locomotive, orders, index);
+          var text = $"{index + 1}. {OrderActions.RowText(step, orders)}{(note != null ? $" ({note})" : "")}";
           var style = index < orders.Current ? DoneStyle : index == orders.Current && started ? CurrentStyle : PlainStyle;
           Func<string> progress = step.Kind switch
           {
@@ -283,7 +285,7 @@ internal sealed class OrdersWindow : BuilderWindowBase
           {
             var tracks = step.Kind == StepKind.Station ? OrderActions.TrackOptions(step.StationId) : null;
             var hasTracks = tracks != null && tracks.Count > 2;
-            entry.ConfigureLayout(step.Kind is StepKind.Refuel or StepKind.Turntable || OrderActions.HasTime(step) || step.IsCouple || hasForecast || hasTracks ? RefuelLineSpacing : StepLineSpacing);
+            entry.ConfigureLayout(step.Kind is StepKind.Refuel or StepKind.Turntable or StepKind.Timetable || OrderActions.HasTime(step) || step.IsCouple || step.HasCoupleSide || hasForecast || hasTracks ? RefuelLineSpacing : StepLineSpacing);
             KeepHeights(entry.HStack(row =>
             {
               row.ConfigureLayout(RowButtonSpacing);
@@ -362,6 +364,25 @@ internal sealed class OrdersWindow : BuilderWindowBase
               if (hasForecast) AddForecast(entry, result);
               return;
             }
+            if (step.HasCoupleSide)
+            {
+              entry.HStack(line =>
+              {
+                line.ConfigureLayout(RowButtonSpacing);
+                line.Spacer(SmartIndent);
+                line.AddLabel(string.Format(style == CurrentStyle ? PlainStyle : style, "Couple at"));
+                var choice = Array.FindIndex(OrderActions.CoupleSides, option => option.Side == step.Side);
+                line.AddDropdown(OrderActions.CoupleSides.Select(option => option.Label).ToList(), choice < 0 ? 0 : choice, picked =>
+                {
+                  if (picked >= 0 && picked < OrderActions.CoupleSides.Length && OrderActions.CoupleSides[picked].Side != step.Side) OrderActions.Run(() => OrderActions.SetSide(locomotive, index, OrderActions.CoupleSides[picked].Side));
+                })
+                  .Width(ThenWidth)
+                  .Tooltip("Couple at", "Which end of the train couples to the cars: the front (the cab's end) or the rear. Either end takes the end that gets there with the fewest moves.");
+                line.Spacer().FlexibleWidth();
+              });
+              if (hasForecast) AddForecast(entry, result);
+              return;
+            }
             if (hasForecast)
             {
               AddForecast(entry, result);
@@ -397,6 +418,35 @@ internal sealed class OrdersWindow : BuilderWindowBase
                   if (picked >= 0 && picked < options.Count && options[picked].Exit != step.Exit) OrderActions.Run(() => OrderActions.SetExit(locomotive, index, options[picked].Exit));
                 })
                   .Width(ExitWidth);
+                if (step.Exit.HasValue)
+                {
+                  var facings = OrderActions.FacingOptions(locomotive);
+                  line.AddDropdown(facings.Select(option => option.Label).ToList(), step.TenderFirst ? 1 : 0, picked =>
+                  {
+                    if (picked >= 0 && picked < facings.Count && facings[picked].TenderFirst != step.TenderFirst) OrderActions.Run(() => OrderActions.SetTenderFirst(locomotive, index, facings[picked].TenderFirst));
+                  })
+                    .Width(ThenWidth)
+                    .Tooltip("Which end leads", "Which end of the engine goes off the turntable onto the track first: the front, or the tender (the rear).");
+                }
+                line.Spacer().FlexibleWidth();
+              });
+              return;
+            }
+            if (step.Kind == StepKind.Timetable)
+            {
+              entry.HStack(line =>
+              {
+                line.ConfigureLayout(RowButtonSpacing);
+                line.Spacer(SmartIndent);
+                line.AddLabel(string.Format(style == CurrentStyle ? PlainStyle : style, "Train"));
+                var options = OrderActions.TimetableOptions(step);
+                var choice = OrderActions.TimetableChoice(step, options);
+                line.AddDropdown(options.Select(option => option.Label).ToList(), choice < 0 ? 0 : choice, picked =>
+                {
+                  if (picked >= 0 && picked < options.Count && picked != choice) OrderActions.Run(() => OrderActions.SetTimetable(locomotive, index, options[picked].Mode, options[picked].Symbol));
+                })
+                  .Width(TimetableWidth)
+                  .Tooltip("Timetable train", "Gives the crew this train of the game's timetable, as Company > Crews > Train Symbol does: the engineer holds at the train's stations until departure time. Next train takes the one after its current train when the order runs; None makes it a plain train again.");
                 line.Spacer().FlexibleWidth();
               });
               return;
@@ -430,7 +480,7 @@ internal sealed class OrdersWindow : BuilderWindowBase
         MenuButton(row, icons, Icons.WaitName, "Wait", "Wait", "Add a wait: until the cars are loaded or unloaded, until tomorrow, or for some hours.", () => OrderActions.WaitItems(locomotive));
         MenuButton(row, icons, Icons.GoBackName, "Go back", "Go back", "Add a loop: go back to an earlier order until a time or a number of times, then go on.", () => OrderActions.GoBackItems(locomotive));
         MenuButton(row, icons, Icons.SpeedName, "Speed", "Set speed", "Add a speed: the trips after it run at that speed until another Set speed order.", () => OrderActions.SpeedItems(locomotive));
-        MenuButton(row, icons, Icons.StationName, "Stations", "Stations", "Add a stop at a passenger station.", () => OrderActions.StationItems(locomotive));
+        MenuButton(row, icons, Icons.StationName, "Stations", "Stations", "Add a stop at a passenger station, or run the train as a train of the game's timetable.", () => OrderActions.StationItems(locomotive));
         MenuButton(row, icons, Icons.RefuelName, "Refuel", "Refuel", "Add a refuel at a water, coal or diesel loader.", () => OrderActions.RefuelItems(locomotive));
         MenuButton(row, icons, Icons.TurntableName, "Turntable", "Turntable", "Add a turntable move: turn the engine around, park it on a stall or leave on another track. Engines only, no cars.", () => OrderActions.TurntableItems(locomotive));
         row.Spacer().FlexibleWidth();

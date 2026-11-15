@@ -31,6 +31,7 @@ internal sealed class TurntableWatch : MonoBehaviour
   private const int MaxRetries = 2;
   private const float MetersToFeet = 3.28084f;
   private const string TrainOrdersHookKey = "qbanrambo.train-orders.turntable";
+  private const string TrainOrdersFacingHookKey = "qbanrambo.train-orders.turntable-facing";
   private const float IdleSeconds = 1.5f;
   private const int MaxReissues = 3;
   private const float ResumeDelay = 5f;
@@ -55,9 +56,9 @@ internal sealed class TurntableWatch : MonoBehaviour
     return null;
   }
 
-  internal static void Begin(BaseLocomotive locomotive, TurntableSite site, PitTrack goal)
+  internal static void Begin(BaseLocomotive locomotive, TurntableSite site, PitTrack goal, bool tenderFirst = false)
   {
-    if (QueuedInTrainOrders(locomotive, site, goal)) return;
+    if (QueuedInTrainOrders(locomotive, site, goal, tenderFirst)) return;
     var refusal = Refusal(locomotive, site);
     if (refusal != null)
     {
@@ -65,7 +66,7 @@ internal sealed class TurntableWatch : MonoBehaviour
       return;
     }
     var cars = locomotive.EnumerateCoupled(Car.LogicalEnd.A).ToList();
-    var job = new Job(locomotive, site, goal, cars);
+    var job = new Job(locomotive, site, goal, cars, goal != null && tenderFirst);
     if (_shared == null) _shared = new GameObject("Goto Turntable Watch").AddComponent<TurntableWatch>();
     _shared._jobs.Remove(locomotive.id);
     if (Start(job)) _shared._jobs[locomotive.id] = job;
@@ -125,7 +126,7 @@ internal sealed class TurntableWatch : MonoBehaviour
       goal = site.Tracks.FirstOrDefault(track => track.Index == record.Goal);
       if (goal == null) return null;
     }
-    var job = new Job(locomotive, site, goal, locomotive.EnumerateCoupled(Car.LogicalEnd.A).ToList())
+    var job = new Job(locomotive, site, goal, locomotive.EnumerateCoupled(Car.LogicalEnd.A).ToList(), goal != null && record.TenderFirst)
     {
       Entry = record.Entry < 0 ? null : site.Tracks.FirstOrDefault(track => track.Index == record.Entry)
     };
@@ -140,13 +141,14 @@ internal sealed class TurntableWatch : MonoBehaviour
   private static void Remember(Job job)
   {
     if (job.Locomotive == null) return;
-    TurntableMemory.Remember(new TurntableMemory.Record(job.Locomotive.id, job.Site.Turntable.id, job.Goal?.Index ?? -1, (int)job.Phase, job.Entry?.Index ?? -1, job.TargetStop));
+    TurntableMemory.Remember(new TurntableMemory.Record(job.Locomotive.id, job.Site.Turntable.id, job.Goal?.Index ?? -1, (int)job.Phase, job.Entry?.Index ?? -1, job.TargetStop, job.TenderFirst));
   }
 
-  private static bool QueuedInTrainOrders(BaseLocomotive locomotive, TurntableSite site, PitTrack goal)
+  private static bool QueuedInTrainOrders(BaseLocomotive locomotive, TurntableSite site, PitTrack goal, bool tenderFirst)
   {
     try
     {
+      if (AppDomain.CurrentDomain.GetData(TrainOrdersFacingHookKey) is Func<object, string, int, bool, bool> facing) return facing(locomotive, site.Turntable.id, goal?.Index ?? -1, tenderFirst);
       return AppDomain.CurrentDomain.GetData(TrainOrdersHookKey) is Func<object, string, int, bool> hook && hook(locomotive, site.Turntable.id, goal?.Index ?? -1);
     }
     catch (Exception exception)
@@ -422,7 +424,7 @@ internal sealed class TurntableWatch : MonoBehaviour
       var endA = graph.GetPosition(site.Turntable.BridgeLocation(TrackSegment.End.A, 0f));
       var endB = graph.GetPosition(site.Turntable.BridgeLocation(TrackSegment.End.B, 0f));
       var frontIsA = Vector3.Distance(front, endA) <= Vector3.Distance(front, endB);
-      stop = frontIsA ? job.Goal.Index % site.Stops : (job.Goal.Index + site.Stops - site.Stops / 2) % site.Stops;
+      stop = frontIsA != job.TenderFirst ? job.Goal.Index % site.Stops : (job.Goal.Index + site.Stops - site.Stops / 2) % site.Stops;
     }
     if (announce) Say($"{job.Locomotive.DisplayName} on the {site.Name}, turning");
     return Line(job, stop, Phase.Turning);
@@ -560,17 +562,19 @@ internal sealed class TurntableWatch : MonoBehaviour
 
   private sealed class Job
   {
-    public Job(BaseLocomotive locomotive, TurntableSite site, PitTrack goal, List<Car> cars)
+    public Job(BaseLocomotive locomotive, TurntableSite site, PitTrack goal, List<Car> cars, bool tenderFirst)
     {
       Locomotive = locomotive;
       Site = site;
       Goal = goal;
       Cars = cars;
+      TenderFirst = tenderFirst;
     }
 
     public BaseLocomotive Locomotive { get; }
     public TurntableSite Site { get; }
     public PitTrack Goal { get; }
+    public bool TenderFirst { get; }
     public List<Car> Cars { get; }
     public PitTrack Entry { get; set; }
     public Phase Phase { get; set; }

@@ -92,6 +92,7 @@ Jobs are kept outside your saves, in the game's preferences, so every engine in 
 - **Pick up > 1 to 10 cars, All cars** couples to the nearest standing cars without naming one. It looks on the train's own track first, the one the train is on and the one the previous order went to, out to the first switch; then within about 300 m. Cars with a locomotive are left alone. It takes that many and leaves the rest, like Take.
 - **Pick up > Couple back** goes back for the cars this train left last, with Leave cars, Keep or a pick-up, even with other cars nearby. For example: Keep 6 cars, go switch the mill, then Couple back.
 - **Pick up > Couple to the cars left by > Order N** goes back for exactly the cars that order (a Leave cars, Keep, Take or Pick up) left, even if the train has left others since. For example: Leave the last 3 cars, go to another track, Leave the last 2 cars, then Couple to the cars left by order 1. If that order hasn't left its cars yet when it's time, or they're gone, the orders pause and say so. Saved jobs and Copy and Paste keep the link.
+- These three have a second line, **Couple at**: **Either end** (the default) couples with whichever end of the train gets there with the fewest moves, so the train backs straight in rather than turning on a wye; **Front** or **Rear** couples with that end of the train (the front is the cab's end), even if the train has to turn to do it.
 
 After every coupling the engineer connects the air and releases the handbrakes.
 
@@ -102,6 +103,7 @@ After every coupling the engineer connects the air and releases the handbrakes.
 - **Turn around**: the engine goes onto the bridge, the bridge turns half a circle and the engine comes back off the way it went on, now facing the other way.
 - **Park on Stall N**: the engine parks in that roundhouse stall, front first.
 - **Leave on Lead …** (named after the direction the track leaves in): the engine leaves on that track, front first. Handy to bring an engine out of a stall.
+- For a stall or a lead, a second choice beside it, **Front first** or **Tender first** (**Rear first** for an engine without a tender), sets which end of the engine goes onto the track first.
 
 Hover the order and the chosen track (or the bridge, for Turn around) lights up in the world, and on the maps with Map Plus.
 
@@ -120,6 +122,27 @@ Add the stations of a route from **Add > Stations**, for example "Go to Sylva De
 At a station with more than one track, the order has a second line, **Track**: **Shortest route** (the default) takes whichever station track the engineer reaches first, which may not be the one by the station building; or pick a track by name. When the mod can tell them apart it calls them **Main track** and **Siding**, with the side they're on, such as "Main track (north)"; otherwise by their side, such as "East track". With a track picked, the train runs through on that track; if it can't reach it, it takes the shortest route and says so.
 
 This needs **Company > Settings > Auto Engineer > Passenger Stops** turned on. The orders pause and say so if it's off.
+
+### Timetable trains
+
+If you run passenger trains on the game's timetable (**Company > Timetable**), the orders can run them on it: the timetable says when the train leaves each station, and the orders take it everywhere else, such as turning around, run arounds, refuels and getting to the next service.
+
+1. Give the engine a crew in **Company > Crews**: a timetable train belongs to a crew.
+2. Add **Add > Stations > Timetable train** and pick the train, for example "2 W - Pass. 1st - Dep. BR 10:42". When its turn comes, the order gives the crew that train, as **Company > Crews > Train Symbol** does, and the next order starts straight away.
+3. Add that train's stations with **Add > Stations**, then whatever comes after the run.
+
+While the crew has a timetable train:
+
+- The engineer stops at that train's stations and holds there until departure time, like any timetable train in the game (the **Bypass Timetable** button on the engineer panel lets it leave early). It doesn't stop at stations outside its timetable, so a station order for one shows "(not a stop of Train 2 W)" in orange.
+- A train running late doesn't wait at its stations: it leaves once the passengers have got on and off.
+- The orders don't tick or untick stations on the coaches; the timetable does. Turn on **Auto Dest** in each coach's Passenger tab (car inspector) so they take their stops from the timetable, transfers included. The box only shows once the crew has a timetable train, so run the Timetable train order first (or pick the train in Company > Crews). Without it the coaches have no stops: nobody gets on, and a late train doesn't stop.
+
+The order's second line, **Train**, changes it: any train of the current timetable, **Next train** or **None**.
+
+- **Next train** picks the train after the crew's current one when the order runs: the next one that starts where the current one ends, else the next by departure time, going back to the first train of the day after the last.
+- **None** makes it a plain train again, and station orders tick the coaches as described in Passengers.
+
+For example, with **Repeat** on: Timetable train 1 E, its stations, a run around, Timetable train 2 W, its stations back, a run around. The engine runs both trains every day and waits at each station for its time. If the engine has no crew, or the train is no longer in the timetable, the orders pause and say why.
 
 ### Refuel
 
@@ -163,6 +186,16 @@ Once a session, when a game loads, the mod asks Nexus Mods whether the QbanRambo
 Clear the orders of your locomotives, then disable **Train Orders** in **Mods**, or delete its folder from `Documents\Railroader\Mods`, and restart the game.
 
 ## Changelog
+
+### 1.9.0
+
+- **Timetable trains**: a new order, **Add > Stations > Timetable train**, gives the engine's crew a train of the game's timetable, the next one or none, so the orders can run timetable trains: the engineer holds at each station until departure time, and the orders do the rest. While the crew has a timetable train, the orders leave the coaches' stops to the timetable, and a station order outside its timetable says so. See Timetable trains above.
+- **Couple at** on Pick up, Couple back and Couple to the cars left by: Either end, Front or Rear, the end of the train that couples to the cars. See Picking up cars above.
+- **Tender first** on turntable orders: park in a stall or leave on a lead tender first, not only front first. See Turntable above.
+- Fixed: **Go back** to a station, run around, refuel, turntable or wait order said "Go back to a removed order".
+- Fixed: Pick up, Couple back and Couple to the cars left by sometimes turned the train on a wye when it could back straight in. They now measure the real way to the cars, around the standing ones, and take the one with the fewest moves.
+- Fixed: **Run around** found no way around cars on some sidings, like the short track by Connelly Creek's L1 and P1, where the way around starts on the other track of a switch.
+- Not compatible with Waypoint Queue: both take over the engineer's waypoint orders, so use one or the other.
 
 ### 1.8.0
 

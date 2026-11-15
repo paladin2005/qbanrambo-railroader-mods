@@ -303,6 +303,12 @@ internal static class WebTrain
         case 17:
           var times = step["times"].IsNull ? (int?)null : step["times"].IntValueOrDefault(1);
           return times.HasValue ? $"Go back to an earlier order, {(times.Value == 1 ? "once" : $"{times.Value} times")}" : $"Go back to an earlier order until {count / 60}:{count % 60:D2}";
+        case 18:
+          if (count == 1) return "No timetable train";
+          if (count == 2) return "Next timetable train";
+          var symbol = step["symbol"].StringValueOrDefault(null);
+          var controller = Model.Ops.Timetable.TimetableController.Shared;
+          return $"Timetable train {(controller != null && controller.TryGetTrainForSymbol(symbol, out var train) ? train.DisplayStringShort : symbol)}";
         case 9:
           return count == AllCars ? "Pick up all cars" : count == 1 ? "Pick up 1 car" : $"Pick up {count} cars";
         case 8:

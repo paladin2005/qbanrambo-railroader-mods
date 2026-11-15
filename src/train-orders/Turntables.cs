@@ -158,4 +158,6 @@ internal static class Turntables
     var angle = Mathf.Repeat(Mathf.Atan2(to.x - from.x, to.z - from.z) * Mathf.Rad2Deg, 360f);
     return Compass[Mathf.RoundToInt(angle / 45f) % Compass.Length];
   }
+
+  internal static string BackFirst(Car locomotive) => locomotive.EnumerateCoupled().Any(car => car.CarType.IsTender) ? "Tender first" : "Rear first";
 }

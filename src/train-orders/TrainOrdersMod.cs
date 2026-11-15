@@ -17,6 +17,7 @@ public sealed class TrainOrdersMod : IModEntryPoint, IWorldLifecycle
     _harmony = new Harmony(context.ModIdentifier);
     _harmony.PatchAll(typeof(TrainOrdersMod).Assembly);
     System.AppDomain.CurrentDomain.SetData(OrderCapture.TurntableHookKey, OrderCapture.TurntableHook);
+    System.AppDomain.CurrentDomain.SetData(OrderCapture.TurntableFacingHookKey, OrderCapture.TurntableFacingHook);
     System.AppDomain.CurrentDomain.SetData(OrderCapture.RunAroundHookKey, OrderCapture.RunAroundHook);
     System.AppDomain.CurrentDomain.SetData(WebOrders.HookKey, WebOrders.Hook);
     System.AppDomain.CurrentDomain.SetData(OrderCapture.WindowOpenKey, OrderCapture.WindowOpenHook);
@@ -33,6 +34,7 @@ public sealed class TrainOrdersMod : IModEntryPoint, IWorldLifecycle
     ModsTab.RemoveAll();
     OnWorldUnload();
     System.AppDomain.CurrentDomain.SetData(OrderCapture.TurntableHookKey, null);
+    System.AppDomain.CurrentDomain.SetData(OrderCapture.TurntableFacingHookKey, null);
     System.AppDomain.CurrentDomain.SetData(OrderCapture.RunAroundHookKey, null);
     System.AppDomain.CurrentDomain.SetData(WebOrders.HookKey, null);
     System.AppDomain.CurrentDomain.SetData(OrderCapture.WindowOpenKey, null);

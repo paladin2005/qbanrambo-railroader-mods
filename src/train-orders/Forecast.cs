@@ -223,7 +223,7 @@ internal static class Forecast
           PickUp(step, result);
           break;
         case StepKind.CoupleBack:
-          CoupleBack(result);
+          CoupleBack(step, result);
           break;
         case StepKind.CoupleTo:
           CoupleTo(step, result);
@@ -308,7 +308,7 @@ internal static class Forecast
       }
     }
 
-    private void CoupleBack(ForecastResult result)
+    private void CoupleBack(OrderStep step, ForecastResult result)
     {
       if (_leftCarId == null)
       {
@@ -316,7 +316,7 @@ internal static class Forecast
         result.Note = "No cars left behind to couple back to";
         return;
       }
-      CoupleToCar(_leftCarId, result);
+      CoupleToCar(_leftCarId, step.Side, result);
     }
 
     private void CoupleTo(OrderStep step, ForecastResult result)
@@ -327,10 +327,10 @@ internal static class Forecast
         result.Note = "That order hasn't left its cars yet";
         return;
       }
-      CoupleToCar(carId, result);
+      CoupleToCar(carId, step.Side, result);
     }
 
-    private void CoupleToCar(string carId, ForecastResult result)
+    private void CoupleToCar(string carId, CutSide side, ForecastResult result)
     {
       if (Train.Any(car => car.Id == carId))
       {
@@ -345,7 +345,7 @@ internal static class Forecast
         return;
       }
       result.Guess = true;
-      Attach(outward, spots, cutFront ?? NearerFront(outward[0]), Maneuvers.AllCars, result);
+      Attach(outward, spots, SideFront(side) ?? cutFront ?? NearerFront(outward[0]), Maneuvers.AllCars, result);
     }
 
     private void PickUp(OrderStep step, ForecastResult result)
@@ -353,7 +353,7 @@ internal static class Forecast
       if (step.CutCarId != null && Train.All(car => car.Id != step.CutCarId) && TryTake(step.CutCarId, null, out var outward, out var spots, out var cutFront))
       {
         result.Guess = true;
-        Attach(outward, spots, cutFront ?? NearerFront(outward[0]), step.Count, result, step.Id);
+        Attach(outward, spots, SideFront(step.Side) ?? cutFront ?? NearerFront(outward[0]), step.Count, result, step.Id);
         return;
       }
       result.Guess = true;
@@ -361,9 +361,12 @@ internal static class Forecast
       var count = step.Count == Maneuvers.AllCars ? 1 : step.Count;
       var cars = Enumerable.Range(0, count).Select(_ => ForecastCar.Unknown(_unknown++)).ToList();
       foreach (var car in cars) result.Added.Add(car.Id);
-      Train.AddRange(cars);
+      if (step.Side == CutSide.Front) Train.InsertRange(0, cars);
+      else Train.AddRange(cars);
       Lose();
     }
+
+    private static bool? SideFront(CutSide side) => side == CutSide.Front ? true : side == CutSide.Rear ? false : null;
 
     private void Cut(OrderStep step, ForecastResult result, bool current)
     {

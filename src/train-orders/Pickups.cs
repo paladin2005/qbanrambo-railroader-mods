@@ -18,8 +18,9 @@ internal static class Pickups
   private const float LineReach = 800f;
   private const int MaxSegments = 60;
   private const int MaxGroups = 8;
+  private const float ReversalCost = 200f;
 
-  internal static OrderWaypoint? Nearest(BaseLocomotive locomotive, OrderStep previous, out Car target, out string problem)
+  internal static OrderWaypoint? Nearest(BaseLocomotive locomotive, OrderStep previous, CutSide side, out Car target, out string problem)
   {
     target = null;
     problem = null;
@@ -27,7 +28,7 @@ internal static class Pickups
     var onLine = Groups(locomotive, (group, _) => group.Any(car => line.Contains(car.LocationA.segment) || line.Contains(car.LocationB.segment)));
     if (onLine.Count > 0)
     {
-      var order = Plan(locomotive, Ends(onLine), float.MaxValue, out target, out var message);
+      var order = Plan(locomotive, Ends(onLine), float.MaxValue, side, out target, out var message);
       if (order.HasValue) return order;
       problem = message;
     }
@@ -37,14 +38,14 @@ internal static class Pickups
       problem ??= "No standing cars on this track or nearby to pick up";
       return null;
     }
-    var fallback = Plan(locomotive, Ends(nearby), MaxRoute, out target, out var nearMessage);
+    var fallback = Plan(locomotive, Ends(nearby), MaxRoute, side, out target, out var nearMessage);
     if (!fallback.HasValue) problem = nearMessage ?? problem ?? "Can't reach the cars nearby";
     return fallback;
   }
 
-  internal static OrderWaypoint? CoupleTo(BaseLocomotive locomotive, Car car, out string problem)
+  internal static OrderWaypoint? CoupleTo(BaseLocomotive locomotive, Car car, CutSide side, out string problem)
   {
-    var order = Plan(locomotive, new List<Car> { car }, float.MaxValue, out _, out var message);
+    var order = Plan(locomotive, new List<Car> { car }, float.MaxValue, side, out _, out var message);
     problem = order.HasValue ? null : message ?? $"Can't reach {car.DisplayName}";
     return order;
   }
@@ -148,12 +149,14 @@ internal static class Pickups
     return groups.OrderBy(entry => entry.Distance).Take(MaxGroups).Select(entry => entry.Cars).ToList();
   }
 
-  private static OrderWaypoint? Plan(BaseLocomotive locomotive, List<Car> candidates, float maxRoute, out Car target, out string message)
+  private static OrderWaypoint? Plan(BaseLocomotive locomotive, List<Car> candidates, float maxRoute, CutSide side, out Car target, out string message)
   {
     target = null;
     message = null;
     var view = Graph.Shared.Current;
+    var arrivings = side == CutSide.Auto ? new[] { WaypointEnd.A, WaypointEnd.B } : new[] { Maneuvers.EndToward(locomotive, side) };
     PlacementPlan? best = null;
+    var bestCost = float.MaxValue;
     foreach (var car in candidates)
     {
       foreach (var end in new[] { Car.End.F, Car.End.R })
@@ -168,7 +171,7 @@ internal static class Pickups
         {
           continue;
         }
-        foreach (var arriving in new[] { WaypointEnd.A, WaypointEnd.B })
+        foreach (var arriving in arrivings)
         {
           PlacementPlan plan;
           try
@@ -184,13 +187,16 @@ internal static class Pickups
             message ??= plan.Message;
             continue;
           }
-          if (plan.RouteDistance > maxRoute)
+          var (distance, reversals) = Measure(plan);
+          if (distance > maxRoute)
           {
             message ??= "The nearest cars are too far to reach";
             continue;
           }
-          if (best.HasValue && plan.RouteDistance >= best.Value.RouteDistance) continue;
+          var cost = distance + reversals * ReversalCost;
+          if (best.HasValue && cost >= bestCost) continue;
           best = plan;
+          bestCost = cost;
           target = car;
         }
       }
@@ -198,5 +204,19 @@ internal static class Pickups
     if (!best.HasValue) return null;
     message = null;
     return best.Value.Waypoint;
+  }
+
+  private static (float Distance, int Reversals) Measure(PlacementPlan plan)
+  {
+    var route = plan.Route;
+    if (route == null || route.Count == 0) return (plan.RouteDistance, 0);
+    var distance = 0f;
+    var reversals = 0;
+    for (var i = 0; i < route.Count; i++)
+    {
+      distance += route[i].Distance;
+      if (i > 0 && route[i].LeadingEnd != route[i - 1].LeadingEnd) reversals++;
+    }
+    return (distance, reversals);
   }
 }

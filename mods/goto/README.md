@@ -55,6 +55,8 @@ When the destination is a dead-end track and the train has cars, the destination
 
 When the train has passenger cars and you pick a passenger station, Goto ticks that station on the cars and sends the train through it, so the game's own passenger stop lines the cars up with the platform, even at short ones like Ela. Once the train is standing at the platform, Goto clears the rest of the order: the train stays there while passengers get on and off. This needs **Company > Settings > Auto Engineer > Passenger Stops** turned on, as the game's passenger stops do. With it off, the train stops at the end of the platform instead, and the message says the cars may not line up. A station stop in progress carries on after you load a save.
 
+When the engine's crew runs a train of the game's timetable (Company > Crews > Train Symbol), Goto leaves the cars' stops to the timetable. That train only stops at the stations in its timetable, so for any other station the message says it won't stop at the platform.
+
 ### Refuel
 
 **Go to > Refuel** shows the locomotive's fuel levels and lists the loaders it can use: water towers, water columns and coaling towers for a steam locomotive, diesel stands for a diesel. The nearest are at the top, with the town and distance. Yards with coal and water next to each other also get a **Coal and water** entry that does both in one go. A fuel that's already full, or a loader whose stock has run out, is greyed out.
@@ -72,6 +74,7 @@ A refuel in progress carries on after you load a save.
 - **Turn around**: the engine goes onto the bridge, the bridge turns half a circle and the engine comes back off the way it went on, now facing the other way.
 - **Stall 1, 2, …**: the engine goes on, the bridge turns to that stall and the engine parks in it, front first. Stalls with something already in them are greyed out.
 - **Lead** tracks (named after the direction they leave in, such as **Lead NE**): the engine goes on, the bridge turns to that track and the engine leaves on it, front first. Handy to bring an engine out of a stall.
+- **Tender first**: the same stalls and leads, with the engine going onto the track tender first (**Rear first** for an engine without a tender). At Dillsboro, for one, an engine parked front first in the engine shed comes out tender first, already facing west.
 
 Hover a choice and its track lights up (the bridge, for Turn around), in the world and, with Map Plus, on the maps.
 
@@ -114,6 +117,12 @@ Once a session, when a game loads, the mod asks Nexus Mods whether the QbanRambo
 Disable **QbanRambo's Goto** in **Mods**, or delete its folder from `Documents\Railroader\Mods`, and restart the game. It doesn't change your saves.
 
 ## Changelog
+
+### 1.8.0
+
+- **Tender first** at turntables: **Go to > Turntable** has a **Tender first** submenu with the same stalls and leads, to park or leave tender first (**Rear first** for an engine without a tender).
+- **Timetable trains**: when the engine's crew runs a train of the game's timetable, a passenger station leaves the coaches' stops to the timetable, and the message says so when the station isn't a stop of that train.
+- Fixed: **Run around** found no way around cars on some sidings, like the short track by Connelly Creek's L1 and P1, where the way around starts on the other track of a switch.
 
 ### 1.7.0
 

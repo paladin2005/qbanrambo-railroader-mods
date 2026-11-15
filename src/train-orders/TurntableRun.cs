@@ -34,6 +34,7 @@ internal sealed class TurntableRun
   private readonly BaseLocomotive _locomotive;
   private readonly TurntableSite _site;
   private readonly PitTrack _goal;
+  private readonly bool _tenderFirst;
   private readonly List<Car> _cars;
   private readonly string _saved;
   private readonly Action<string> _save;
@@ -48,11 +49,12 @@ internal sealed class TurntableRun
   private float _idleSince = -1f;
   private int _reissues;
 
-  internal TurntableRun(BaseLocomotive locomotive, TurntableSite site, PitTrack goal, string saved, Action<string> save)
+  internal TurntableRun(BaseLocomotive locomotive, TurntableSite site, PitTrack goal, bool tenderFirst, string saved, Action<string> save)
   {
     _locomotive = locomotive;
     _site = site;
     _goal = goal;
+    _tenderFirst = tenderFirst;
     _saved = saved;
     _save = save;
     _cars = locomotive.EnumerateCoupled(Car.LogicalEnd.A).ToList();
@@ -342,7 +344,7 @@ internal sealed class TurntableRun
     var endA = graph.GetPosition(_site.Turntable.BridgeLocation(TrackSegment.End.A, 0f));
     var endB = graph.GetPosition(_site.Turntable.BridgeLocation(TrackSegment.End.B, 0f));
     var frontIsA = Vector3.Distance(front, endA) <= Vector3.Distance(front, endB);
-    return frontIsA ? _goal.Index % stops : (_goal.Index + stops - stops / 2) % stops;
+    return frontIsA != _tenderFirst ? _goal.Index % stops : (_goal.Index + stops - stops / 2) % stops;
   }
 
   private void Leave()

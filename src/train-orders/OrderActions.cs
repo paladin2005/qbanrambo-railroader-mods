@@ -57,6 +57,7 @@ internal static class OrderActions
       StepKind.RunAround => step.Side == CutSide.Rear ? "Run around the cars behind" : "Run around the cars in front",
       StepKind.SetSpeed => step.Count < 0 ? "Set speed to max" : $"Set speed {step.Count} mph",
       StepKind.GoBack => $"Go back to an earlier order{GoBackCondition(step)}",
+      StepKind.Timetable => step.Count == OrderStep.TimetableNone ? "No timetable train" : step.Count == OrderStep.TimetableNext ? "Next timetable train" : $"Timetable train {TimetableTrains.Short(step.Symbol)}",
       _ => "Unknown order"
     };
   }
@@ -144,6 +145,16 @@ internal static class OrderActions
     Edit(locomotive, orders =>
     {
       if (index >= 0 && index < orders.Steps.Count) orders.Steps[index] = orders.Steps[index].WithTrack(track);
+    });
+  }
+
+  internal static List<(bool TenderFirst, string Label)> FacingOptions(Car locomotive) => new() { (false, "Front first"), (true, Turntables.BackFirst(locomotive)) };
+
+  internal static void SetTenderFirst(Car locomotive, int index, bool tenderFirst)
+  {
+    Edit(locomotive, orders =>
+    {
+      if (index >= 0 && index < orders.Steps.Count) orders.Steps[index] = orders.Steps[index].WithTenderFirst(tenderFirst);
     });
   }
 
@@ -285,6 +296,17 @@ internal static class OrderActions
     });
   }
 
+  internal static readonly (CutSide Side, string Label)[] CoupleSides = { (CutSide.Auto, "Either end"), (CutSide.Front, "Front"), (CutSide.Rear, "Rear") };
+
+  internal static void SetSide(Car locomotive, int index, CutSide side)
+  {
+    Edit(locomotive, orders =>
+    {
+      if (index < 0 || index >= orders.Steps.Count) return;
+      orders.Steps[index] = orders.Steps[index].WithSide(side);
+    });
+  }
+
   internal static void AddPickUp(Car locomotive, int count)
   {
     Edit(locomotive, orders => orders.Add(OrderStep.PickUp(count)));
@@ -392,13 +414,64 @@ internal static class OrderActions
 
   internal static IReadOnlyList<MenuItem> StationItems(Car locomotive)
   {
+    var items = new List<MenuItem>();
+    var trains = TimetableTrains.All();
+    if (trains.Count > 0) items.Add(MenuItem.Submenu("Timetable train", () => TimetableItems(locomotive), "Run the next orders as a train of the game's timetable"));
     var stops = Passengers.Available();
-    if (stops.Count == 0) return new[] { MenuItem.Action("No stations", () => { }, null, true) };
-    return stops.Select(stop =>
+    if (stops.Count == 0) items.Add(MenuItem.Action("No stations", () => { }, null, true));
+    items.AddRange(stops.Select(stop =>
     {
       var id = stop.identifier;
       return MenuItem.Action(stop.DisplayName, () => Run(() => AddStation(locomotive, id)));
-    }).ToList();
+    }));
+    return items;
+  }
+
+  private static IReadOnlyList<MenuItem> TimetableItems(Car locomotive)
+  {
+    return TimetableOptions().Select(option => MenuItem.Action(option.Label, () => Run(() => Edit(locomotive, orders => orders.Add(OrderStep.ForTimetable(option.Mode, option.Symbol)))), option.Mode switch
+    {
+      OrderStep.TimetableNext => "The train after its current one, picked when the order runs",
+      OrderStep.TimetableNone => "Stop being a timetable train",
+      _ => null
+    })).ToList();
+  }
+
+  internal static List<(int Mode, string Symbol, string Label)> TimetableOptions(OrderStep step = null)
+  {
+    var options = new List<(int Mode, string Symbol, string Label)> { (OrderStep.TimetableNext, null, "Next train"), (OrderStep.TimetableNone, null, "None") };
+    options.AddRange(TimetableTrains.All().Select(train => (OrderStep.TimetableTrain, train.Name, TimetableTrains.Label(train))));
+    if (step != null && step.Count == OrderStep.TimetableTrain && !options.Any(option => option.Mode == OrderStep.TimetableTrain && option.Symbol == step.Symbol))
+    {
+      options.Add((OrderStep.TimetableTrain, step.Symbol, $"{step.Symbol} (not in the timetable)"));
+    }
+    return options;
+  }
+
+  internal static int TimetableChoice(OrderStep step, List<(int Mode, string Symbol, string Label)> options) => options.FindIndex(option => option.Mode == step.Count && (option.Mode != OrderStep.TimetableTrain || option.Symbol == step.Symbol));
+
+  internal static void SetTimetable(Car locomotive, int index, int mode, string symbol)
+  {
+    Edit(locomotive, orders =>
+    {
+      if (index >= 0 && index < orders.Steps.Count) orders.Steps[index] = orders.Steps[index].WithTimetable(mode, symbol);
+    });
+  }
+
+  internal static string TimetableNote(Car locomotive, OrderList orders, int index)
+  {
+    try
+    {
+      var step = orders.Steps[index];
+      if (step.Kind != StepKind.Station) return null;
+      var train = TimetableTrains.At(locomotive, orders, index, out var known);
+      if (!known || train == null || TimetableTrains.StopsAt(train, step.StationId)) return null;
+      return $"<color=#FFA040>not a stop of Train {train.DisplayStringShort}</color>";
+    }
+    catch (Exception)
+    {
+      return null;
+    }
   }
 
   internal static void AddStation(Car locomotive, string stationId)

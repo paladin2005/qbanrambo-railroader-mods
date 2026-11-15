@@ -18,7 +18,7 @@ internal static class TurntableMemory
       var parts = line.Split('\t');
       if (parts.Length < 6 || parts[0].Length == 0 || parts[1].Length == 0) continue;
       if (!int.TryParse(parts[2], out var goal) || !int.TryParse(parts[3], out var phase) || !int.TryParse(parts[4], out var entry) || !int.TryParse(parts[5], out var stop)) continue;
-      records[parts[0]] = new Record(parts[0], parts[1], goal, phase, entry, stop);
+      records[parts[0]] = new Record(parts[0], parts[1], goal, phase, entry, stop, parts.Length > 6 && parts[6] == "1");
     }
     return records;
   }
@@ -52,7 +52,7 @@ internal static class TurntableMemory
 
   private static void Save(Dictionary<string, Record> records)
   {
-    var text = string.Join("\n", records.Values.Select(record => string.Join("\t", record.Locomotive, record.Turntable, record.Goal, record.Phase, record.Entry, record.Stop)));
+    var text = string.Join("\n", records.Values.Select(record => string.Join("\t", record.Locomotive, record.Turntable, record.Goal, record.Phase, record.Entry, record.Stop, record.TenderFirst ? "1" : "0")));
     if (text.Length == 0) GlobalPreferences.DeleteKey(Key);
     else GlobalPreferences.SetString(Key, text);
     GlobalPreferences.Flush();
@@ -60,7 +60,7 @@ internal static class TurntableMemory
 
   internal sealed class Record
   {
-    public Record(string locomotive, string turntable, int goal, int phase, int entry, int stop)
+    public Record(string locomotive, string turntable, int goal, int phase, int entry, int stop, bool tenderFirst)
     {
       Locomotive = locomotive;
       Turntable = turntable;
@@ -68,6 +68,7 @@ internal static class TurntableMemory
       Phase = phase;
       Entry = entry;
       Stop = stop;
+      TenderFirst = tenderFirst;
     }
 
     public string Locomotive { get; }
@@ -76,5 +77,6 @@ internal static class TurntableMemory
     public int Phase { get; }
     public int Entry { get; }
     public int Stop { get; }
+    public bool TenderFirst { get; }
   }
 }

@@ -44,8 +44,16 @@ internal static class Stations
     return null;
   }
 
+  internal static Model.Ops.Timetable.Timetable.Train TimetableTrain(Car locomotive)
+  {
+    var controller = Model.Ops.Timetable.TimetableController.Shared;
+    if (controller == null || string.IsNullOrEmpty(locomotive.trainCrewId)) return null;
+    return controller.TryGetTrainForTrainCrewId(locomotive.trainCrewId, out var train) ? train : null;
+  }
+
   internal static void Tick(Car locomotive, PassengerStop stop)
   {
+    if (TimetableTrain(locomotive) != null) return;
     foreach (var coach in Coaches(locomotive))
     {
       var current = coach.GetPassengerMarker()?.Destinations ?? new HashSet<string>();

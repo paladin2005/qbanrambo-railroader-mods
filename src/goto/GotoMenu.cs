@@ -343,7 +343,10 @@ internal static class GotoMenu
       {
         Stations.Tick(locomotive, stop);
         StationWatch.Begin(locomotive, stop, waypoint.LocationString);
-        note = stopsOff ? "Passenger Stops is off in Company > Settings, so the coaches may not line up with the platform" : "stopping with the coaches at the platform";
+        var timetable = Stations.TimetableTrain(locomotive);
+        note = stopsOff ? "Passenger Stops is off in Company > Settings, so the coaches may not line up with the platform"
+          : timetable != null && !timetable.Entries.Any(entry => entry.Station == stop.timetableCode) ? $"not a stop of Train {timetable.DisplayStringShort}, so the engineer won't stop at the platform"
+          : "stopping with the coaches at the platform";
       }
       var released = GotoSettings.ReleaseHandbrakes ? ReleaseHandbrakes(locomotive) : 0;
       var handbrakes = released == 0 ? "" : $", released {released} {(released == 1 ? "handbrake" : "handbrakes")}";
