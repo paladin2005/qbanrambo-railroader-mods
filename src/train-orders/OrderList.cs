@@ -30,7 +30,9 @@ internal enum StepKind
   CoupleTo,
   SetSpeed,
   GoBack,
-  Timetable
+  Timetable,
+  WaitSpotted,
+  RunJob
 }
 
 internal enum CutSide
@@ -64,12 +66,13 @@ internal sealed class OrderStep
   private const string TimesKey = "times";
   private const string LapsKey = "laps";
   private const string SymbolKey = "symbol";
+  private const string JobKey = "job";
   internal const int DefaultBelow = 50;
   internal const int MorningHour = -1;
   private const int MinutesPerHour = 60;
   private const int MinutesPerDay = 24 * MinutesPerHour;
 
-  private OrderStep(StepKind kind, OrderWaypoint? waypoint, int count, CutSide side = CutSide.Auto, string cutCarId = null, bool? smart = null, bool cabRelative = false, int? untilMinute = null, string stationId = null, string fuel = null, string turntableId = null, int? exit = null, string turntableState = null, bool keep = false, string track = null, string farCarId = null, string id = null, string from = null, int? leave = null, int? times = null, int? laps = null, string symbol = null)
+  private OrderStep(StepKind kind, OrderWaypoint? waypoint, int count, CutSide side = CutSide.Auto, string cutCarId = null, bool? smart = null, bool cabRelative = false, int? untilMinute = null, string stationId = null, string fuel = null, string turntableId = null, int? exit = null, string turntableState = null, bool keep = false, string track = null, string farCarId = null, string id = null, string from = null, int? leave = null, int? times = null, int? laps = null, string symbol = null, string job = null)
   {
     Kind = kind;
     Waypoint = waypoint;
@@ -93,6 +96,7 @@ internal sealed class OrderStep
     Times = times;
     Laps = laps;
     Symbol = symbol;
+    Job = job;
   }
 
   public StepKind Kind { get; }
@@ -117,6 +121,7 @@ internal sealed class OrderStep
   public int? Times { get; }
   public int? Laps { get; }
   public string Symbol { get; }
+  public string Job { get; }
 
   public bool LeavesCars => Kind == StepKind.Cut || ((Kind == StepKind.PickUp || IsCouple) && Count != Maneuvers.AllCars) || (IsCouple && Leave.HasValue);
 
@@ -142,6 +147,7 @@ internal sealed class OrderStep
     StepKind.SetSpeed => $"speed|{Count}",
     StepKind.GoBack => $"back|{From}|{Times}|{Count}",
     StepKind.Timetable => $"timetable|{Count}|{Symbol}",
+    StepKind.RunJob => $"job|{Job}",
     _ => Kind.ToString()
   };
 
@@ -235,13 +241,17 @@ internal sealed class OrderStep
 
   public static OrderStep GoBackTimes(string targetId, int times) => new(StepKind.GoBack, null, 0, from: targetId, times: Math.Max(1, times));
 
-  public OrderStep WithLaps(int laps) => new(Kind, Waypoint, Count, Side, CutCarId, Smart, CabRelative, UntilMinute, StationId, Fuel, TurntableId, Exit, TurntableState, Keep, Track, FarCarId, Id, From, Leave, Times, laps, Symbol);
+  public OrderStep WithLaps(int laps) => new(Kind, Waypoint, Count, Side, CutCarId, Smart, CabRelative, UntilMinute, StationId, Fuel, TurntableId, Exit, TurntableState, Keep, Track, FarCarId, Id, From, Leave, Times, laps, Symbol, Job);
 
   public OrderStep WithGoBackTime(int minuteOfDay) => Kind == StepKind.GoBack && !Times.HasValue ? GoBackUntil(From, minuteOfDay).WithId(Id) : this;
 
   public static OrderStep SetSpeed(int mph) => new(StepKind.SetSpeed, null, mph == 0 ? MaxSpeed : mph);
 
   public static OrderStep WaitRepair() => new(StepKind.WaitRepair, null, 0);
+
+  public static OrderStep WaitSpotted() => new(StepKind.WaitSpotted, null, 0);
+
+  public static OrderStep RunJob(string name) => new(StepKind.RunJob, null, 0, job: name);
 
   public const int TimetableTrain = 0;
 
@@ -269,19 +279,19 @@ internal sealed class OrderStep
 
   public OrderStep WithTenderFirst(bool tenderFirst) => Kind == StepKind.Turntable ? Turntable(TurntableId, Exit, tenderFirst).WithId(Id) : this;
 
-  public OrderStep WithTurntableState(string state) => new(Kind, Waypoint, Count, Side, CutCarId, Smart, CabRelative, UntilMinute, StationId, Fuel, TurntableId, Exit, state, Keep, Track, FarCarId, Id, From, Leave, Times, Laps, Symbol);
+  public OrderStep WithTurntableState(string state) => new(Kind, Waypoint, Count, Side, CutCarId, Smart, CabRelative, UntilMinute, StationId, Fuel, TurntableId, Exit, state, Keep, Track, FarCarId, Id, From, Leave, Times, Laps, Symbol, Job);
 
-  public OrderStep WithCutCar(string carId) => new(Kind, Waypoint, Count, Side, carId, Smart, CabRelative, UntilMinute, StationId, Fuel, TurntableId, Exit, TurntableState, Keep, Track, FarCarId, Id, From, Leave, Times, Laps, Symbol);
+  public OrderStep WithCutCar(string carId) => new(Kind, Waypoint, Count, Side, carId, Smart, CabRelative, UntilMinute, StationId, Fuel, TurntableId, Exit, TurntableState, Keep, Track, FarCarId, Id, From, Leave, Times, Laps, Symbol, Job);
 
-  public OrderStep WithUntil(int minute) => new(Kind, Waypoint, Count, Side, CutCarId, Smart, CabRelative, minute, StationId, Fuel, TurntableId, Exit, TurntableState, Keep, Track, FarCarId, Id, From, Leave, Times, Laps, Symbol);
+  public OrderStep WithUntil(int minute) => new(Kind, Waypoint, Count, Side, CutCarId, Smart, CabRelative, minute, StationId, Fuel, TurntableId, Exit, TurntableState, Keep, Track, FarCarId, Id, From, Leave, Times, Laps, Symbol, Job);
 
-  public OrderStep WithId(string id) => new(Kind, Waypoint, Count, Side, CutCarId, Smart, CabRelative, UntilMinute, StationId, Fuel, TurntableId, Exit, TurntableState, Keep, Track, FarCarId, id, From, Leave, Times, Laps, Symbol);
+  public OrderStep WithId(string id) => new(Kind, Waypoint, Count, Side, CutCarId, Smart, CabRelative, UntilMinute, StationId, Fuel, TurntableId, Exit, TurntableState, Keep, Track, FarCarId, id, From, Leave, Times, Laps, Symbol, Job);
 
-  public OrderStep WithFrom(string from) => new(Kind, Waypoint, Count, Side, CutCarId, Smart, CabRelative, UntilMinute, StationId, Fuel, TurntableId, Exit, TurntableState, Keep, Track, FarCarId, Id, from, Leave, Times, Laps, Symbol);
+  public OrderStep WithFrom(string from) => new(Kind, Waypoint, Count, Side, CutCarId, Smart, CabRelative, UntilMinute, StationId, Fuel, TurntableId, Exit, TurntableState, Keep, Track, FarCarId, Id, from, Leave, Times, Laps, Symbol, Job);
 
   public OrderStep WithTime(int minuteOfDay) => new(StepKind.WaitTime, null, minuteOfDay, id: Id);
 
-  public OrderStep Fresh() => new(Kind, Waypoint, Count, Side, null, Smart, CabRelative, null, StationId, Fuel, TurntableId, Exit, keep: Keep, track: Track, id: Id, from: From, leave: Leave, times: Times, symbol: Symbol);
+  public OrderStep Fresh() => new(Kind, Waypoint, Count, Side, null, Smart, CabRelative, null, StationId, Fuel, TurntableId, Exit, keep: Keep, track: Track, id: Id, from: From, leave: Leave, times: Times, symbol: Symbol, job: Job);
 
   public static List<OrderStep> Renumbered(IEnumerable<OrderStep> steps)
   {
@@ -318,6 +328,7 @@ internal sealed class OrderStep
     if (Times.HasValue) values[TimesKey] = Times.Value;
     if (Laps.HasValue) values[LapsKey] = Laps.Value;
     if (!string.IsNullOrEmpty(Symbol)) values[SymbolKey] = Symbol;
+    if (!string.IsNullOrEmpty(Job)) values[JobKey] = Job;
     return Value.Dictionary(values);
   }
 
@@ -338,6 +349,8 @@ internal sealed class OrderStep
       StepKind.WaitLoad => WaitLoad(),
       StepKind.WaitUnload => WaitUnload(),
       StepKind.WaitRepair => WaitRepair(),
+      StepKind.WaitSpotted => WaitSpotted(),
+      StepKind.RunJob => NullIfEmpty(value[JobKey].StringValueOrDefault(null)) is { } job ? RunJob(job) : null,
       StepKind.WaitDay or StepKind.WaitHours or StepKind.WaitMinutes or StepKind.WaitTime => new OrderStep(kind, null, value[CountKey].IntValueOrDefault(0), untilMinute: value[UntilKey].IsNull ? null : value[UntilKey].IntValueOrDefault(0)),
       StepKind.Station => NullIfEmpty(value[StationKey].StringValueOrDefault(null)) is { } stationId ? ToStation(stationId, NullIfEmpty(value[TrackKey].StringValueOrDefault(null))) : null,
       StepKind.Refuel => NullIfEmpty(value[FuelKey].StringValueOrDefault(null)) is { } fuel ? new OrderStep(kind, null, value[CountKey].IntValueOrDefault(DefaultBelow), fuel: fuel) : null,
@@ -446,11 +459,14 @@ internal sealed class OrderList
 
   public void Move(int index, int offset)
   {
-    var target = index + offset;
-    if (index < 0 || index >= Steps.Count || target < 0 || target >= Steps.Count) return;
-    (Steps[index], Steps[target]) = (Steps[target], Steps[index]);
-    if (Current == index) Current = target;
-    else if (Current == target) Current = index;
+    if (index < 0 || index >= Steps.Count) return;
+    var target = Math.Max(0, Math.Min(Steps.Count - 1, index + offset));
+    if (target == index) return;
+    var current = Current < Steps.Count ? Steps[Current] : null;
+    var step = Steps[index];
+    Steps.RemoveAt(index);
+    Steps.Insert(target, step);
+    if (current != null) Current = Steps.IndexOf(current);
   }
 
   public void Clear()

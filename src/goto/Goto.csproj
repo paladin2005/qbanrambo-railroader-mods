@@ -3,7 +3,7 @@
   <PropertyGroup>
     <AssemblyName>QbanRambo.Goto</AssemblyName>
     <RootNamespace>QbanRambo.Goto</RootNamespace>
-    <Version>1.8.0</Version>
+    <Version>1.8.1</Version>
     <Product>QbanRambo's Goto</Product>
     <Authors>QbanRambo</Authors>
     <Company>QbanRambo</Company>
@@ -16,7 +16,7 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <RailroaderDir Condition="'$(RailroaderDir)' == '' and '$(RAILROADER_DIR)' != ''">$(RAILROADER_DIR)</RailroaderDir>
-    <RailroaderDir Condition="'$(RailroaderDir)' == ''">F:\SteamLibrary\steamapps\common\Railroader</RailroaderDir>
+    <RailroaderDir Condition="'$(RailroaderDir)' == ''">E:\SteamLibrary\steamapps\common\Railroader</RailroaderDir>
     <RailroaderManaged>$(RailroaderDir)\Railroader_Data\Managed</RailroaderManaged>
     <PackDir>$(MSBuildThisFileDirectory)..\..\mods\goto</PackDir>
   </PropertyGroup>

@@ -245,6 +245,7 @@ internal static class WebOrders
         StepKind.WaitUnload => OrderActions.LoadProgress(locomotive, true),
         StepKind.WaitDay or StepKind.WaitHours or StepKind.WaitMinutes or StepKind.WaitTime => OrderActions.TimeLeft(step),
         StepKind.WaitRepair => Repairs.Progress(locomotive),
+        StepKind.WaitSpotted => OrderActions.SpottedProgress(locomotive),
         StepKind.Move or StepKind.Station => Dispatcher.IsBoarding(locomotive) ? "boarding" : null,
         StepKind.Refuel => Dispatcher.RefuelDetail(locomotive),
         StepKind.Turntable => Dispatcher.TurntableDetail(locomotive),

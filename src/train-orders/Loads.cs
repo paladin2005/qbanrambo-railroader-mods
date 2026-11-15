@@ -47,6 +47,8 @@ internal static class Loads
     return new LoadState(full, empty, total, fill);
   }
 
+  internal static int Spotted(Car locomotive) => locomotive.EnumerateCoupled().Count(car => car is not BaseLocomotive && !car.CarType.IsTender && AtDestination(car));
+
   private static bool AtDestination(Car car)
   {
     var ops = OpsController.Shared;

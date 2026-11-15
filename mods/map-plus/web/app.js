@@ -1827,8 +1827,8 @@ function ordersBodyHtml(view) {
     const text = richText(row.t) + (row.d ? ` (${richText(row.d)})` : '');
     const controls = row.c.map(control => controlHtml(control, index)).join('');
     return `<div class="order ${row.s}" data-row="${index}"><div class="order-line"><span class="order-text">${text}</span><span class="order-buttons">`
-      + `<button class="icon" data-orders="move" data-index="${index}" data-offset="-1" title="Run this order earlier"${index === 0 ? ' disabled' : ''}>${icon('up')}</button>`
-      + `<button class="icon" data-orders="move" data-index="${index}" data-offset="1" title="Run this order later"${index === view.rows.length - 1 ? ' disabled' : ''}>${icon('down')}</button>`
+      + `<button class="icon" data-orders="move" data-index="${index}" data-offset="-1" title="Run this order earlier (Shift+click: first)"${index === 0 ? ' disabled' : ''}>${icon('up')}</button>`
+      + `<button class="icon" data-orders="move" data-index="${index}" data-offset="1" title="Run this order later (Shift+click: last)"${index === view.rows.length - 1 ? ' disabled' : ''}>${icon('down')}</button>`
       + `<button class="icon" data-orders="remove" data-index="${index}" title="Remove this order">${icon('trash')}</button>`
       + `</span></div>${controls}${row.f ? stripHtml(row.f, side) : ''}</div>`;
   }).join('');
@@ -2002,7 +2002,7 @@ ordersPanel.addEventListener('click', event => {
   if (!button || button.disabled) return;
   const action = button.dataset.orders;
   const index = Number(button.dataset.index);
-  if (action === 'move') ordersAction('move', { index, offset: Number(button.dataset.offset) });
+  if (action === 'move') ordersAction('move', { index, offset: Number(button.dataset.offset) * (event.shiftKey ? 1000 : 1) });
   else if (action === 'remove') ordersAction('remove', { index });
   else if (action === 'run') ordersAction('run', { on: !(ordersView && ordersView.running) });
   else if (action === 'save') {

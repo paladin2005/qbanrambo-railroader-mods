@@ -28,7 +28,7 @@ internal sealed class Dispatcher : MonoBehaviour
   private const float ArrivalTolerance = 15f;
   private const float MovingSpeed = 0.5f;
   private const double LoadStallGameSeconds = 2 * 60 * 60;
-  private const int GoBackHorizonMinutes = 12 * 60;
+  private const int GoBackHorizonMinutes = 18 * 60;
   private const float LoadProgressEpsilon = 0.001f;
   private const string AlreadyPositioned = "Already positioned at waypoint.";
 
@@ -192,6 +192,9 @@ internal sealed class Dispatcher : MonoBehaviour
         break;
       case Phase.Loading:
         CheckLoading(locomotive, orders, runner);
+        break;
+      case Phase.Spotted:
+        CheckSpotted(locomotive, orders, runner);
         break;
       case Phase.Repairing:
         CheckRepair(locomotive, orders, runner);
@@ -543,6 +546,51 @@ internal sealed class Dispatcher : MonoBehaviour
     }
   }
 
+  private static void CheckSpotted(BaseLocomotive locomotive, OrderList orders, Runner runner)
+  {
+    var spotted = Loads.Spotted(locomotive);
+    if (spotted == 0)
+    {
+      Complete(locomotive, orders);
+      return;
+    }
+    var now = TimeWeather.Now.TotalSeconds;
+    var fill = Loads.Measure(locomotive).Fill;
+    if (spotted != runner.Spotted || Mathf.Abs(fill - runner.LoadFill) > LoadProgressEpsilon)
+    {
+      runner.Spotted = spotted;
+      runner.LoadFill = fill;
+      runner.LoadProgressAt = now;
+    }
+    else if (now - runner.LoadProgressAt > LoadStallGameSeconds)
+    {
+      Pause(locomotive, orders, $"Nothing changed with {(spotted == 1 ? "1 car" : $"{spotted} cars")} still spotted");
+    }
+  }
+
+  private static void StartRunJob(BaseLocomotive locomotive, OrderList orders, OrderStep step)
+  {
+    var job = SavedJobs.Find(step.Job);
+    if (job == null || job.Steps.Count == 0)
+    {
+      Pause(locomotive, orders, job == null ? $"The saved job \"{step.Job}\" is gone" : $"The saved job \"{step.Job}\" has no orders");
+      return;
+    }
+    if (LapTooShort(locomotive))
+    {
+      Pause(locomotive, orders, "Nothing to run: the jobs finish straight away");
+      return;
+    }
+    DropRunner(locomotive.id);
+    orders.Clear();
+    orders.Repeat = job.Repeat;
+    orders.PassSignals = job.PassSignals;
+    foreach (var added in OrderStep.Renumbered(job.Steps)) orders.Add(added);
+    orders.Status = null;
+    orders.Write(locomotive);
+    Toast.Present($"{locomotive.DisplayName}: running the saved job \"{job.Name}\"", ToastPosition.Bottom);
+  }
+
   private static void Start(BaseLocomotive locomotive, OrderList orders, OrderStep step, Runner runner)
   {
     switch (step.Kind)
@@ -586,6 +634,21 @@ internal sealed class Dispatcher : MonoBehaviour
         runner.LoadFill = load.Fill;
         runner.LoadProgressAt = TimeWeather.Now.TotalSeconds;
         runner.Phase = Phase.Loading;
+        break;
+      case StepKind.WaitSpotted:
+        if (!locomotive.IsStopped(SettleSeconds)) return;
+        runner.Spotted = Loads.Spotted(locomotive);
+        if (runner.Spotted == 0)
+        {
+          Complete(locomotive, orders);
+          return;
+        }
+        runner.LoadFill = Loads.Measure(locomotive).Fill;
+        runner.LoadProgressAt = TimeWeather.Now.TotalSeconds;
+        runner.Phase = Phase.Spotted;
+        break;
+      case StepKind.RunJob:
+        StartRunJob(locomotive, orders, step);
         break;
       case StepKind.WaitRepair:
         StartRepair(locomotive, orders, runner);
@@ -1017,7 +1080,8 @@ internal sealed class Dispatcher : MonoBehaviour
     Boarding,
     Refuel,
     Turntable,
-    Repairing
+    Repairing,
+    Spotted
   }
 
   private sealed class Runner
@@ -1036,6 +1100,7 @@ internal sealed class Dispatcher : MonoBehaviour
     public float CutStarted { get; set; }
     public float LoadFill { get; set; }
     public bool Unloading { get; set; }
+    public int Spotted { get; set; }
     public double LoadProgressAt { get; set; }
     public PassengerStop Station { get; set; }
     public double BoardingSince { get; set; }

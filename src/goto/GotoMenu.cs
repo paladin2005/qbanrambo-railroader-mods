@@ -383,20 +383,26 @@ internal static class GotoMenu
     foreach (var span in position.Spans ?? Array.Empty<TrackSpan>())
     {
       if (span == null) continue;
-      var reachable = new List<(Location Location, float Distance)>();
-      foreach (var end in new[] { span.lower, span.upper })
-      {
-        if (!end.HasValue) continue;
-        var distance = RouteDistance(locomotive, cars, length, forward, end.Value, ref failure) ?? RouteDistance(locomotive, cars, length, !forward, end.Value, ref failure);
-        if (distance.HasValue) reachable.Add((end.Value, distance.Value));
-      }
+      var ends = new[] { span.lower, span.upper }.Where(end => end.HasValue).Select(end => end.Value).ToList();
+      if (ends.Count == 0) continue;
+      var ahead = RouteDistances(locomotive, cars, length, forward, ends, ref failure);
+      var back = ahead.All(distance => distance.HasValue) ? null : RouteDistances(locomotive, cars, length, !forward, ends, ref failure);
+      var reachable = ends.Select((end, index) => (Location: end, Distance: ahead[index] ?? back?[index])).Where(candidate => candidate.Distance.HasValue).ToList();
       if (reachable.Count == 0) continue;
-      var near = reachable.Min(candidate => candidate.Distance);
+      var near = reachable.Min(candidate => candidate.Distance.Value);
       if (near >= bestNear) continue;
       bestNear = near;
-      best = reachable.OrderByDescending(candidate => candidate.Distance).First().Location;
+      var same = ahead.All(distance => distance.HasValue) ? ahead : back != null && back.All(distance => distance.HasValue) ? back : null;
+      best = same != null ? ends[same.IndexOf(same.Max())] : reachable.OrderByDescending(candidate => candidate.Distance).First().Location;
     }
     return best;
+  }
+
+  private static List<float?> RouteDistances(BaseLocomotive locomotive, List<Car> cars, float length, bool forward, List<Location> locations, ref string failure)
+  {
+    var distances = new List<float?>();
+    foreach (var location in locations) distances.Add(RouteDistance(locomotive, cars, length, forward, location, ref failure));
+    return distances;
   }
 
   private static float? RouteDistance(BaseLocomotive locomotive, List<Car> cars, float length, bool forward, Location location, ref string failure)

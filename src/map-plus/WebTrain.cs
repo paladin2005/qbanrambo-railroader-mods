@@ -314,6 +314,10 @@ internal static class WebTrain
         case 8:
           var turntable = TurntableName(step["turntable"].StringValueOrDefault(null));
           return step["exit"].IsNull ? $"Turn around at the {turntable}" : $"Use the {turntable}";
+        case 19:
+          return "Wait until no car is spotted";
+        case 20:
+          return $"Run the saved job \"{step["job"].StringValueOrDefault("")}\"";
         default:
           return "Unknown order";
       }

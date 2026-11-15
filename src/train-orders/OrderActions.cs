@@ -58,6 +58,8 @@ internal static class OrderActions
       StepKind.SetSpeed => step.Count < 0 ? "Set speed to max" : $"Set speed {step.Count} mph",
       StepKind.GoBack => $"Go back to an earlier order{GoBackCondition(step)}",
       StepKind.Timetable => step.Count == OrderStep.TimetableNone ? "No timetable train" : step.Count == OrderStep.TimetableNext ? "Next timetable train" : $"Timetable train {TimetableTrains.Short(step.Symbol)}",
+      StepKind.WaitSpotted => "Wait until no car is spotted",
+      StepKind.RunJob => SavedJobs.Find(step.Job) != null ? $"Run the saved job \"{step.Job}\"" : $"Run the saved job \"{step.Job}\" (not saved any more)",
       _ => "Unknown order"
     };
   }
@@ -328,6 +330,7 @@ internal static class OrderActions
     {
       MenuItem.Action("Until loaded", () => Run(() => AddWaitLoad(locomotive)), "Until every freight car is full"),
       MenuItem.Action("Until unloaded", () => Run(() => AddWaitUnload(locomotive)), "Until every freight car is empty"),
+      MenuItem.Action("Until not spotted", () => Run(() => Edit(locomotive, orders => orders.Add(OrderStep.WaitSpotted()))), "Until no car of the train is at its waybill destination, so every car has been worked"),
       MenuItem.Action("Until repaired", () => Run(() => Edit(locomotive, orders => orders.Add(OrderStep.WaitRepair()))), "On a repair track, until every car reaches its repair limit"),
       MenuItem.Submenu("Wait time", () => TimeItems(locomotive))
     };
@@ -374,10 +377,20 @@ internal static class OrderActions
   internal static IReadOnlyList<MenuItem> GoBackItems(Car locomotive)
   {
     var orders = OrderList.Read(locomotive);
-    if (orders.Steps.Count == 0) return new[] { MenuItem.Action("Add some orders first", null, "Go back repeats orders already in the list", disabled: true) };
-    return orders.Steps
-      .Select((step, index) => MenuItem.Submenu($"{index + 1}. {RowText(step, orders)}", () => GoBackChoices(locomotive, index)))
-      .ToList();
+    var items = orders.Steps.Count == 0
+      ? new List<MenuItem> { MenuItem.Action("Add some orders first", null, "Go back repeats orders already in the list", disabled: true) }
+      : orders.Steps.Select((step, index) => MenuItem.Submenu($"{index + 1}. {RowText(step, orders)}", () => GoBackChoices(locomotive, index))).ToList();
+    var jobs = SavedJobs.All();
+    items.Add(jobs.Count == 0
+      ? MenuItem.Action("Run a saved job", null, "No saved jobs yet", disabled: true)
+      : MenuItem.Submenu("Run a saved job", () => jobs.Select(job => MenuItem.Action(job.Name, () => Run(() => Edit(locomotive, list => list.Add(OrderStep.RunJob(job.Name)))), "When the orders get here, they change to this job")).ToList(), "Hand over to a saved job"));
+    return items;
+  }
+
+  internal static string SpottedProgress(Car locomotive)
+  {
+    var spotted = Loads.Spotted(locomotive);
+    return spotted == 0 ? "none spotted" : spotted == 1 ? "1 car spotted" : $"{spotted} cars spotted";
   }
 
   private static IReadOnlyList<MenuItem> GoBackChoices(Car locomotive, int index)
@@ -601,6 +614,7 @@ internal static class OrderActions
     Edit(locomotive, orders =>
     {
       orders.Clear();
+      orders.Repeat = false;
       orders.Running = false;
       orders.Status = null;
     });

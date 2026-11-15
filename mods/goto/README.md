@@ -118,6 +118,10 @@ Disable **QbanRambo's Goto** in **Mods**, or delete its folder from `Documents\R
 
 ## Changelog
 
+### 1.8.1
+
+- Fixed: with a long train, a trip to an industry track could stop at its entrance instead of going in to its far end, so with **Smart entrance** only the first car got onto the track (Whittier Saw Mill R1, for one).
+
 ### 1.8.0
 
 - **Tender first** at turntables: **Go to > Turntable** has a **Tender first** submenu with the same stalls and leads, to park or leave tender first (**Rear first** for an engine without a tender).

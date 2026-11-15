@@ -274,6 +274,7 @@ internal sealed class OrdersWindow : BuilderWindowBase
             StepKind.WaitUnload => () => OrderActions.LoadProgress(locomotive, true),
             StepKind.WaitDay or StepKind.WaitHours or StepKind.WaitMinutes or StepKind.WaitTime => () => OrderActions.TimeLeft(step),
             StepKind.WaitRepair => () => Repairs.Progress(locomotive),
+            StepKind.WaitSpotted => () => OrderActions.SpottedProgress(locomotive),
             StepKind.Move or StepKind.Station => () => Dispatcher.IsBoarding(locomotive) ? "boarding" : null,
             StepKind.Refuel => () => Dispatcher.RefuelDetail(locomotive),
             StepKind.Turntable => () => Dispatcher.TurntableDetail(locomotive),
@@ -296,8 +297,8 @@ internal sealed class OrdersWindow : BuilderWindowBase
               KeepHeights(row.HStack(buttons =>
               {
                 buttons.ConfigureLayout(IconButtonSpacing);
-                IconButton(buttons, icons, Icons.UpName, "Up", "Move up", "Run this order earlier", () => OrderActions.Move(locomotive, index, -1)).Disable(index == 0);
-                IconButton(buttons, icons, Icons.DownName, "Down", "Move down", "Run this order later", () => OrderActions.Move(locomotive, index, 1)).Disable(index == orders.Steps.Count - 1);
+                IconButton(buttons, icons, Icons.UpName, "Up", "Move up", "Run this order earlier. Shift+click makes it the first order.", () => OrderActions.Move(locomotive, index, GameInput.IsShiftDown ? -index : -1)).Disable(index == 0);
+                IconButton(buttons, icons, Icons.DownName, "Down", "Move down", "Run this order later. Shift+click makes it the last order.", () => OrderActions.Move(locomotive, index, GameInput.IsShiftDown ? orders.Steps.Count : 1)).Disable(index == orders.Steps.Count - 1);
                 IconButton(buttons, icons, Icons.TrashName, "Remove", "Remove", "Remove this order", () => OrderActions.Remove(locomotive, index));
               }));
             }));
@@ -477,8 +478,8 @@ internal sealed class OrdersWindow : BuilderWindowBase
         }
         MenuButton(row, icons, Icons.PickUpName, "Pick up", "Pick up cars", "Add an order to pick up cars: the train couples to the nearest standing cars and takes that many, leaving the rest.", () => OrderActions.PickUpItems(locomotive));
         MenuButton(row, icons, Icons.CutName, "Leave cars", "Leave cars", "Add an order to leave cars behind: the front or rear ones, a few or all of them.", () => OrderActions.CutItems(locomotive));
-        MenuButton(row, icons, Icons.WaitName, "Wait", "Wait", "Add a wait: until the cars are loaded or unloaded, until tomorrow, or for some hours.", () => OrderActions.WaitItems(locomotive));
-        MenuButton(row, icons, Icons.GoBackName, "Go back", "Go back", "Add a loop: go back to an earlier order until a time or a number of times, then go on.", () => OrderActions.GoBackItems(locomotive));
+        MenuButton(row, icons, Icons.WaitName, "Wait", "Wait", "Add a wait: until the cars are loaded, unloaded or no longer spotted, until tomorrow, or for some hours.", () => OrderActions.WaitItems(locomotive));
+        MenuButton(row, icons, Icons.GoBackName, "Go back", "Go back", "Add a loop: go back to an earlier order until a time or a number of times, then go on. Or hand the engine over to a saved job.", () => OrderActions.GoBackItems(locomotive));
         MenuButton(row, icons, Icons.SpeedName, "Speed", "Set speed", "Add a speed: the trips after it run at that speed until another Set speed order.", () => OrderActions.SpeedItems(locomotive));
         MenuButton(row, icons, Icons.StationName, "Stations", "Stations", "Add a stop at a passenger station, or run the train as a train of the game's timetable.", () => OrderActions.StationItems(locomotive));
         MenuButton(row, icons, Icons.RefuelName, "Refuel", "Refuel", "Add a refuel at a water, coal or diesel loader.", () => OrderActions.RefuelItems(locomotive));

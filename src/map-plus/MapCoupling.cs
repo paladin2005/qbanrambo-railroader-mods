@@ -20,6 +20,7 @@ internal static class MapCoupling
   private const string OrdersHookKey = "qbanrambo.train-orders.web";
   private const string WatchedKey = "qbanrambo.couple-watched";
   private const float StandingSpeed = 0.5f;
+  private const float ReversalCost = 200f;
 
   internal static string Unavailable(BaseLocomotive locomotive, Car car)
   {
@@ -37,7 +38,7 @@ internal static class MapCoupling
     if (reason != null) return reason;
     var group = Consist.Of(car).ToList();
     if (group.Count == 0) group.Add(car);
-    var order = Plan(locomotive, group, out var target, out var message);
+    var order = Plan(locomotive, ClickedEnd(group, car), out var target, out var message) ?? Plan(locomotive, group, out target, out message);
     var name = group.Count > 1 ? $"{car.DisplayName} ({group.Count} cars)" : car.DisplayName;
     if (!order.HasValue) return message != null ? $"{locomotive.DisplayName} can't couple to {name}: {message}" : $"{locomotive.DisplayName} can't reach {name}";
     var hook = queue ? AppDomain.CurrentDomain.GetData(OrdersHookKey) as Func<string, string, string, string> : null;
@@ -73,6 +74,7 @@ internal static class MapCoupling
     message = null;
     var view = Graph.Shared.Current;
     PlacementPlan? best = null;
+    var bestCost = float.MaxValue;
     foreach (var car in group)
     {
       foreach (var end in new[] { Car.End.F, Car.End.R })
@@ -103,8 +105,10 @@ internal static class MapCoupling
             message ??= plan.Message;
             continue;
           }
-          if (best.HasValue && plan.RouteDistance >= best.Value.RouteDistance) continue;
+          var cost = Cost(plan);
+          if (best.HasValue && cost >= bestCost) continue;
           best = plan;
+          bestCost = cost;
           target = car;
         }
       }
@@ -112,6 +116,27 @@ internal static class MapCoupling
     if (!best.HasValue) return null;
     message = null;
     return best.Value.Waypoint;
+  }
+
+  private static List<Car> ClickedEnd(List<Car> group, Car car)
+  {
+    var middle = group.Count - 1;
+    var index = group.IndexOf(car);
+    if (group.Count < 2 || index < 0 || index * 2 == middle) return group;
+    return new List<Car> { index * 2 < middle ? group[0] : group[middle] };
+  }
+
+  private static float Cost(PlacementPlan plan)
+  {
+    var route = plan.Route;
+    if (route == null || route.Count == 0) return plan.RouteDistance;
+    var cost = 0f;
+    for (var i = 0; i < route.Count; i++)
+    {
+      cost += route[i].Distance;
+      if (i > 0 && route[i].LeadingEnd != route[i - 1].LeadingEnd) cost += ReversalCost;
+    }
+    return cost;
   }
 
   internal static void ConnectAir(Car locomotive)

@@ -1,4 +1,4 @@
-$script:GameDir = if ($env:RAILROADER_DIR) { $env:RAILROADER_DIR } else { "F:\SteamLibrary\steamapps\common\Railroader" }
+$script:GameDir = if ($env:RAILROADER_DIR) { $env:RAILROADER_DIR } else { "E:\SteamLibrary\steamapps\common\Railroader" }
 $script:ManagedDir = Join-Path $script:GameDir "Railroader_Data\Managed"
 $script:RelayAssembly = $null
 

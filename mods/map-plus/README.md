@@ -77,7 +77,7 @@ Right-click any track on the map for a menu, the game's own kind:
 - **Send <locomotive> here**: the selected locomotive's engineer gets a waypoint there, at its current speed limit, the same as picking the waypoint yourself, and a cyan pulse marks the spot. If there's no route, the pulse is red and the game's own message tells you why. Any handbrakes set in the train are released, and the message says how many. Greyed out until you select a locomotive.
 - **Place fusee** or, near one, **Extinguish fusee**: the engineer of any train stops at a lit fusee, as with the game's own fusees. Greyed out when your role can't place them.
 
-Right-click a car for **Couple <locomotive> to <car>**: the selected locomotive's engineer drives to the nearest free end of that car's cut and couples, the same as picking the car with the game's waypoint tool. Once coupled and stopped, the air is connected and the handbrakes released, and a message says how many cars it took. Greyed out until you select a locomotive, and for cars already in its train. The web map has the same item on its right-click menu. With the Train Orders window open, the coupling is added to the orders instead.
+Right-click a car for **Couple <locomotive> to <car>**: the selected locomotive's engineer drives to the end of that car's cut nearer the car you clicked (click the first or last car to pick the end; the middle car takes the quicker one) and couples, the same as picking the car with the game's waypoint tool. Once coupled and stopped, the air is connected and the handbrakes released, and a message says how many cars it took. Greyed out until you select a locomotive, and for cars already in its train. The web map has the same item on its right-click menu. With the Train Orders window open, the coupling is added to the orders instead.
 
 If you're already picking a waypoint the game's way, right-click works as before.
 
@@ -184,6 +184,12 @@ Once a session, when a game loads, the mod asks Nexus Mods whether the QbanRambo
 Disable **Map Plus** in **Mods**, or delete its folder from `Documents\Railroader\Mods`, and restart the game. It doesn't change your saves.
 
 ## Changelog
+
+### 1.8.0
+
+- **Couple to a car from the game's map** couples at the end of the cut nearer the car you right-click, so you can pick the end, for a run around for one. It also picks the way there with the fewest moves, so the train backs straight in instead of turning on a wye.
+- The web map's train panel and the orders on the map describe Train Orders 1.10.0's new orders: Wait until not spotted and Run a saved job.
+- In the web map's orders panel, **Shift+click** on an order's up or down button makes it the first or the last order (with Train Orders 1.10.0).
 
 ### 1.7.1
 
