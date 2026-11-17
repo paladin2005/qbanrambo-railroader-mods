@@ -91,7 +91,7 @@ internal static class Signals
     if (interlocking == null) return "not an interlocking signal";
     try
     {
-      var train = new HashSet<Car>(locomotive.EnumerateCoupled());
+      var train = TrainAndTarget(locomotive);
       if (!BlocksClear(signal, train)) return "another train is in the blocks ahead";
       var graph = Graph.Shared;
       var controller = TrainController.Shared;
@@ -128,6 +128,28 @@ internal static class Signals
     {
       return $"the track around it couldn't be checked ({exception.Message})";
     }
+  }
+
+  private static HashSet<Car> TrainAndTarget(BaseLocomotive locomotive)
+  {
+    var train = new HashSet<Car>(locomotive.EnumerateCoupled());
+    var orders = OrderList.Read(locomotive);
+    if (orders.Finished) return train;
+    var step = orders.Steps[orders.Current];
+    var target = step.Kind switch
+    {
+      StepKind.RunAround or StepKind.PickUp => step.CutCarId,
+      StepKind.CoupleBack => orders.LeftCarId,
+      StepKind.CoupleTo => step.From != null && orders.Cuts.TryGetValue(step.From, out var left) ? left : null,
+      StepKind.Move when step.IsCouple => step.Waypoint.Value.CoupleToCarId,
+      _ => null
+    };
+    var controller = TrainController.Shared;
+    if (string.IsNullOrEmpty(target) || controller == null || !controller.TryGetCarForId(target, out var car) || car == null || car.IsInBardo || car.set == null || train.Contains(car)) return train;
+    var group = car.EnumerateCoupled().ToList();
+    if (group.Any(member => member is BaseLocomotive || Mathf.Abs(member.velocity) > MovingSpeed)) return train;
+    train.UnionWith(group);
+    return train;
   }
 
   private static bool BlocksClear(CTCSignal signal, HashSet<Car> train)

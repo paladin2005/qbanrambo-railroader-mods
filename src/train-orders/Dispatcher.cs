@@ -28,6 +28,12 @@ internal sealed class Dispatcher : MonoBehaviour
   private const float ArrivalTolerance = 15f;
   private const float MovingSpeed = 0.5f;
   private const double LoadStallGameSeconds = 2 * 60 * 60;
+  private const double FullStallGameSeconds = 60 * 60;
+  private const float BackOffMeters = 6f;
+  private const float RerouteSeconds = 30f;
+  private const float RerouteMinimum = 300f;
+  private const float RerouteGain = 150f;
+  private const float RerouteShare = 0.15f;
   private const int GoBackHorizonMinutes = 18 * 60;
   private const float LoadProgressEpsilon = 0.001f;
   private const string AlreadyPositioned = "Already positioned at waypoint.";
@@ -60,8 +66,9 @@ internal sealed class Dispatcher : MonoBehaviour
       return;
     }
     if (runner.Phase != Phase.Moving) return;
-    if (message.EndsWith(AlreadyPositioned)) runner.Arrived = true;
-    else runner.Problem ??= message;
+    if (!message.EndsWith(AlreadyPositioned)) runner.Problem ??= message;
+    else if (runner.CoupleCarId != null && !locomotive.EnumerateCoupled().Any(car => car.id == runner.CoupleCarId)) runner.BackOffNeeded = true;
+    else runner.Arrived = true;
   }
 
   private static void DropRunner(string id)
@@ -195,6 +202,12 @@ internal sealed class Dispatcher : MonoBehaviour
         break;
       case Phase.Spotted:
         CheckSpotted(locomotive, orders, runner);
+        break;
+      case Phase.Full:
+        CheckFull(locomotive, orders, runner);
+        break;
+      case Phase.Cars:
+        if (Maneuvers.CarCount(locomotive) >= step.Count) Complete(locomotive, orders);
         break;
       case Phase.Repairing:
         CheckRepair(locomotive, orders, runner);
@@ -464,15 +477,16 @@ internal sealed class Dispatcher : MonoBehaviour
       Pause(locomotive, orders, "The fuel loader is gone");
       return;
     }
-    var usable = stops.Where(stop => Fuel.Slot(fuelCar, stop.Load) != null).ToList();
+    var cars = Fuel.FuelCars(locomotive);
+    var usable = stops.Where(stop => cars.Any(car => Fuel.Slot(car, stop.Load) != null)).ToList();
     if (usable.Count == 0)
     {
       Pause(locomotive, orders, $"{locomotive.DisplayName} takes none of that fuel");
       return;
     }
-    if (!Fuel.NeedsFuel(fuelCar, usable, step.Count))
+    if (!cars.Any(car => Fuel.NeedsFuel(car, usable, step.Count)))
     {
-      TrainOrdersMod.Log?.Info($"Refuel skipped for {locomotive.DisplayName}: {Fuel.Levels(fuelCar)}, threshold {step.Count}%");
+      TrainOrdersMod.Log?.Info($"Refuel skipped for {locomotive.DisplayName}: {string.Join("; ", cars.Select(car => $"{car.DisplayName} {Fuel.Levels(car)}"))}, threshold {step.Count}%");
       Complete(locomotive, orders);
       return;
     }
@@ -568,6 +582,120 @@ internal sealed class Dispatcher : MonoBehaviour
     }
   }
 
+  private static void CheckFull(BaseLocomotive locomotive, OrderList orders, Runner runner)
+  {
+    var (riders, seats) = Passengers.Seats(locomotive);
+    if (riders >= seats)
+    {
+      Complete(locomotive, orders);
+      return;
+    }
+    var step = orders.Steps[orders.Current];
+    if (step.Kind == StepKind.WaitFull && step.UntilMinute.HasValue && OrderStep.Minute(TimeWeather.Now) >= step.UntilMinute.Value)
+    {
+      Toast.Present($"{locomotive.DisplayName}: leaving at {OrderActions.ClockMinute(step.Count)} with {riders} of {seats} seats taken", ToastPosition.Bottom);
+      Complete(locomotive, orders);
+      return;
+    }
+    var now = TimeWeather.Now.TotalSeconds;
+    if (riders != runner.Riders)
+    {
+      runner.Riders = riders;
+      runner.LoadProgressAt = now;
+    }
+    else if (now - runner.LoadProgressAt > FullStallGameSeconds)
+    {
+      Toast.Present($"{locomotive.DisplayName}: nobody boarded for an hour, going on with {riders} of {seats} seats taken", ToastPosition.Bottom);
+      Complete(locomotive, orders);
+    }
+  }
+
+  private static void Arrive(Runner runner)
+  {
+    if (!runner.Recouple)
+    {
+      runner.Phase = Phase.Arrived;
+      return;
+    }
+    runner.Recouple = false;
+    runner.Arrived = false;
+    runner.Phase = Phase.Idle;
+  }
+
+  private static void BackOff(BaseLocomotive locomotive, OrderList orders, Runner runner)
+  {
+    var name = TryGetCar(runner.CoupleCarId, out var car) && car != null ? car.DisplayName : "the car";
+    var away = runner.BackOffs++ == 0 && car != null ? AwayFrom(locomotive, car) : null;
+    if (!away.HasValue)
+    {
+      Pause(locomotive, orders, $"Couldn't couple to {name}: the engine stands against it and can't back off");
+      return;
+    }
+    TrainOrdersMod.Log?.Info($"{locomotive.DisplayName} stands against {name}, backing off to couple");
+    runner.Recouple = true;
+    Send(locomotive, runner, away.Value);
+  }
+
+  private static OrderWaypoint? AwayFrom(BaseLocomotive locomotive, Car car)
+  {
+    var graph = Graph.Shared;
+    var cars = locomotive.EnumerateCoupled(Car.LogicalEnd.A).ToList();
+    if (graph == null || cars.Count == 0) return null;
+    var view = graph.Current;
+    var target = car.GetCenterPosition(view);
+    var first = cars[0];
+    var last = cars[cars.Count - 1];
+    var ends = new[] { (Car: first, End: first.LogicalToEnd(Car.LogicalEnd.A)), (Car: last, End: last.LogicalToEnd(Car.LogicalEnd.B)) }
+      .OrderByDescending(entry => Vector3.Distance(graph.GetPosition(entry.End == Car.End.F ? entry.Car.LocationF : entry.Car.LocationR), target));
+    var length = AutoEngineerPlanner.CalculateTotalLength(cars);
+    var forward = new AutoEngineerPersistence(locomotive.KeyValueObject).Orders.Forward;
+    foreach (var (endCar, end) in ends)
+    {
+      Location location;
+      try
+      {
+        location = end == Car.End.F
+          ? view.LocationByMoving(endCar.LocationF, BackOffMeters, checkSwitchAgainstMovement: false, stopAtEndOfTrack: true)
+          : view.LocationByMoving(endCar.LocationR, -BackOffMeters, checkSwitchAgainstMovement: false, stopAtEndOfTrack: true).Flipped();
+      }
+      catch (Exception)
+      {
+        continue;
+      }
+      var waypoint = new OrderWaypoint(Graph.LocationToString(location), null);
+      if (AutoEngineerPlanner.TryPlanRoute(locomotive, cars, length, forward, waypoint, graph, out _, out _, out _, out _, out _) || AutoEngineerPlanner.TryPlanRoute(locomotive, cars, length, !forward, waypoint, graph, out _, out _, out _, out _, out _)) return waypoint;
+    }
+    return null;
+  }
+
+  private static void TryReroute(BaseLocomotive locomotive, Runner runner, OrderWaypoint waypoint)
+  {
+    if (!TrainOrdersSettings.Reroute || Mathf.Abs(locomotive.velocity) < MovingSpeed || Time.time < runner.RerouteAt) return;
+    runner.RerouteAt = Time.time + RerouteSeconds;
+    var planner = locomotive.AutoEngineerPlanner;
+    var remaining = planner != null ? planner.RemainingWaypointDistance : null;
+    if (!remaining.HasValue || remaining.Value < RerouteMinimum) return;
+    var cars = locomotive.EnumerateCoupled().ToList();
+    var forward = new AutoEngineerPersistence(locomotive.KeyValueObject).Orders.Forward;
+    if (!AutoEngineerPlanner.TryPlanRoute(locomotive, cars, AutoEngineerPlanner.CalculateTotalLength(cars), forward, waypoint, Graph.Shared, out _, out var route, out _, out _, out _) || route == null || route.Count == 0) return;
+    var distance = route.Sum(step => step.Distance);
+    var saved = remaining.Value - distance;
+    if (saved < Mathf.Max(RerouteGain, remaining.Value * RerouteShare)) return;
+    Rerouting = locomotive.id;
+    try
+    {
+      StateManager.ApplyLocal(new AutoEngineerWaypointRerouteRequest(locomotive.id));
+    }
+    finally
+    {
+      Rerouting = null;
+    }
+    TrainOrdersMod.Log?.Info($"{locomotive.DisplayName}: rerouted, {remaining.Value:0} m left on the old route, {distance:0} m on the new one");
+    Toast.Present($"{locomotive.DisplayName}: found a shorter way, {Fuel.Distance(saved)} less", ToastPosition.Bottom);
+  }
+
+  internal static string Rerouting;
+
   private static void StartRunJob(BaseLocomotive locomotive, OrderList orders, OrderStep step)
   {
     var job = SavedJobs.Find(step.Job);
@@ -649,6 +777,41 @@ internal sealed class Dispatcher : MonoBehaviour
         break;
       case StepKind.RunJob:
         StartRunJob(locomotive, orders, step);
+        break;
+      case StepKind.WaitFull:
+        if (!locomotive.IsStopped(SettleSeconds)) return;
+        var (riders, seats) = Passengers.Seats(locomotive);
+        if (seats == 0)
+        {
+          Pause(locomotive, orders, "No passenger cars in the train");
+          return;
+        }
+        if (riders >= seats)
+        {
+          Complete(locomotive, orders);
+          return;
+        }
+        if (!Passengers.AtAnyStation(locomotive))
+        {
+          Pause(locomotive, orders, "Not at a passenger station");
+          return;
+        }
+        if (step.Count >= 0 && !step.UntilMinute.HasValue)
+        {
+          orders.Steps[orders.Current] = step.WithUntil(step.UntilFrom(TimeWeather.Now));
+          orders.Write(locomotive);
+        }
+        runner.Riders = riders;
+        runner.LoadProgressAt = TimeWeather.Now.TotalSeconds;
+        runner.Phase = Phase.Full;
+        break;
+      case StepKind.WaitCars:
+        if (Maneuvers.CarCount(locomotive) >= step.Count)
+        {
+          Complete(locomotive, orders);
+          return;
+        }
+        runner.Phase = Phase.Cars;
         break;
       case StepKind.WaitRepair:
         StartRepair(locomotive, orders, runner);
@@ -962,9 +1125,15 @@ internal sealed class Dispatcher : MonoBehaviour
 
   private static void CheckMove(BaseLocomotive locomotive, OrderList orders, Runner runner)
   {
+    if (runner.BackOffNeeded)
+    {
+      runner.BackOffNeeded = false;
+      BackOff(locomotive, orders, runner);
+      return;
+    }
     if (runner.Arrived || (runner.Station != null && runner.Moved && AtStation(locomotive, runner.Station)))
     {
-      runner.Phase = Phase.Arrived;
+      Arrive(runner);
       return;
     }
     if (runner.Problem != null)
@@ -995,7 +1164,8 @@ internal sealed class Dispatcher : MonoBehaviour
       return;
     }
     if (Mathf.Abs(locomotive.velocity) > MovingSpeed) runner.Moved = true;
-    if (runner.CoupleCarId == null && runner.Moved && locomotive.IsStopped(StoppedNearSeconds) && IsNear(locomotive, runner.SentLocation)) runner.Phase = Phase.Arrived;
+    if (runner.CoupleCarId == null && runner.Moved && locomotive.IsStopped(StoppedNearSeconds) && IsNear(locomotive, runner.SentLocation)) Arrive(runner);
+    else TryReroute(locomotive, runner, waypoint);
   }
 
   private static bool IsNear(BaseLocomotive locomotive, string locationString)
@@ -1081,7 +1251,9 @@ internal sealed class Dispatcher : MonoBehaviour
     Refuel,
     Turntable,
     Repairing,
-    Spotted
+    Spotted,
+    Full,
+    Cars
   }
 
   private sealed class Runner
@@ -1101,6 +1273,11 @@ internal sealed class Dispatcher : MonoBehaviour
     public float LoadFill { get; set; }
     public bool Unloading { get; set; }
     public int Spotted { get; set; }
+    public int Riders { get; set; }
+    public bool BackOffNeeded { get; set; }
+    public int BackOffs { get; set; }
+    public bool Recouple { get; set; }
+    public float RerouteAt { get; set; }
     public double LoadProgressAt { get; set; }
     public PassengerStop Station { get; set; }
     public double BoardingSince { get; set; }
@@ -1130,15 +1307,17 @@ internal static class WaypointNoticePatch
 [HarmonyPatch(typeof(AutoEngineerPlanner), "SendMessageToRouteRequester")]
 internal static class RouteMessagePatch
 {
-  private static void Prefix(string message, AlertLevel alertLevel, BaseLocomotive ____locomotive)
+  private static bool Prefix(string message, AlertLevel alertLevel, BaseLocomotive ____locomotive)
   {
     try
     {
       if (alertLevel == AlertLevel.Error) Dispatcher.OnRouteError(____locomotive, message);
+      else if (Dispatcher.Rerouting != null && Dispatcher.Rerouting == ____locomotive?.id) return false;
     }
     catch (Exception exception)
     {
       TrainOrdersMod.Log?.Error(exception, "Couldn't read the engineer's route message");
     }
+    return true;
   }
 }

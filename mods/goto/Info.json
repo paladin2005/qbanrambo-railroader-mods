@@ -1,6 +1,6 @@
 {
   "identifier": "qbanrambo/goto",
-  "version": "1.8.1",
+  "version": "1.9.1",
   "name": "QbanRambo's Goto",
   "author": "QbanRambo",
   "url": "https://www.nexusmods.com/railroader/mods/1887",
@@ -10,7 +10,7 @@
   "assemblies": ["QbanRambo.Goto.dll"],
   "dependencies": {
     "required": [
-      "rr/game >=0.6.0"
+      "rr/game >=0.6.3"
     ]
   }
 }

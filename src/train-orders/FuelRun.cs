@@ -30,7 +30,10 @@ internal sealed class FuelRun
   private const float Progress = 0.0001f;
 
   private readonly BaseLocomotive _locomotive;
-  private readonly Queue<FuelStop> _stops;
+  private readonly List<FuelStop> _remaining;
+  private readonly List<Car> _cars;
+  private Car _car;
+  private bool _chosen;
   private readonly float _started;
   private FuelStop _stop;
   private Phase _phase;
@@ -49,9 +52,11 @@ internal sealed class FuelRun
   {
     _locomotive = locomotive;
     var fuelCar = Fuel.FuelCar(locomotive);
+    _cars = Fuel.FuelCars(locomotive);
+    _car = fuelCar;
     var ordered = stops.Count == 1 ? stops : stops.OrderBy(stop => Distance(fuelCar, stop)).ToList();
     _stop = ordered[0];
-    _stops = new Queue<FuelStop>(ordered.Skip(1));
+    _remaining = ordered.ToList();
     _started = Time.time;
   }
 
@@ -61,7 +66,7 @@ internal sealed class FuelRun
 
   internal void Begin() => Advance();
 
-  internal string Detail => _phase == Phase.Loading && SlotFor() is { } slot ? $"{_stop.LoadName.ToLowerInvariant()} {Fuel.Level(slot, _stop.Load) * 100f:0}%" : null;
+  internal string Detail => _phase == Phase.Loading && SlotFor() is { } slot ? $"{(_cars.Count > 1 ? $"{_car.DisplayName} " : "")}{_stop.LoadName.ToLowerInvariant()} {Fuel.Level(slot, _stop.Load) * 100f:0}%" : null;
 
   internal void Tick()
   {
@@ -123,7 +128,7 @@ internal sealed class FuelRun
     if (_phase == Phase.BackingOff)
     {
       if (ours) helper.ClearWaypoint();
-      Advance();
+      Retry();
       return;
     }
     if (Fuel.Offset(slot, _stop) > ArrivalReach)
@@ -154,7 +159,7 @@ internal sealed class FuelRun
       Send(away, Phase.BackingOff);
       return;
     }
-    Advance();
+    Retry();
   }
 
   private void CheckLoading(FuelSlot slot)
@@ -169,7 +174,7 @@ internal sealed class FuelRun
     if (Fuel.IsFull(slot, _stop.Load))
     {
       Release();
-      NextStop();
+      Advance();
       return;
     }
     if (level > _lastLevel + Progress)
@@ -186,18 +191,7 @@ internal sealed class FuelRun
       return;
     }
     Say($"{_locomotive.DisplayName}: {Place(_stop)} ran out of {_stop.LoadName.ToLowerInvariant()}");
-    NextStop();
-  }
-
-  private void NextStop()
-  {
-    if (_stops.Count == 0)
-    {
-      Done = true;
-      return;
-    }
-    _stop = _stops.Dequeue();
-    _retries = 0;
+    _remaining.Remove(_stop);
     Advance();
   }
 
@@ -205,16 +199,32 @@ internal sealed class FuelRun
   {
     while (Problem == null)
     {
-      if (Approach()) return;
-      if (Problem != null) return;
-      if (_stops.Count == 0)
+      if (!Choose())
       {
         Done = true;
         return;
       }
-      _stop = _stops.Dequeue();
-      _retries = 0;
+      if (Approach() || Problem != null) return;
+      _remaining.Remove(_stop);
     }
+  }
+
+  private void Retry()
+  {
+    if (Approach() || Problem != null) return;
+    _remaining.Remove(_stop);
+    Advance();
+  }
+
+  private bool Choose()
+  {
+    var next = !_chosen && Fuel.NextCar(_locomotive, _cars, _stop) is { } first ? (Stop: _stop, Car: first) : Fuel.Nearest(_locomotive, _cars, _remaining);
+    _chosen = true;
+    if (next.Stop == null) return false;
+    if (next.Stop != _stop || next.Car != _car) _retries = 0;
+    _stop = next.Stop;
+    _car = next.Car;
+    return true;
   }
 
   private bool Approach()
@@ -279,7 +289,7 @@ internal sealed class FuelRun
 
   private void Fail(string problem) => Problem ??= problem;
 
-  private FuelSlot SlotFor() => Fuel.Slot(Fuel.FuelCar(_locomotive), _stop.Load);
+  private FuelSlot SlotFor() => Fuel.Slot(_car, _stop.Load);
 
   private AutoEngineerOrdersHelper Helper() => new(_locomotive, new AutoEngineerPersistence(_locomotive.KeyValueObject));
 

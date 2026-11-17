@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using Game;
+using Game.HomeDirectory;
 using UI.Builder;
 
 namespace QbanRambo.MapPlus;
@@ -11,8 +12,10 @@ internal static class MapPlusConfig
   private const string FileName = "map-plus.cfg";
   private const string InGameKey = "EnableMapInGame";
   private const string ClickSelectsKey = "qbanrambo.map-plus.click-selects";
+  private const string OpenAtCameraKey = "qbanrambo.map-plus.open-at-camera";
 
   private static bool? _clickSelects;
+  private static bool? _openAtCamera;
 
   internal static string FilePath { get; private set; }
 
@@ -28,11 +31,21 @@ internal static class MapPlusConfig
     {
       ModsTab.Toggle(section, "On the game's map", () => MapInGameSaved, SetMapInGame, $"On: Map Plus adds its layers, buttons and tools to the game's map. Off: the game's map is left alone and only the web map runs (http://localhost:8630/map-plus). Saved in {FileName}; takes effect the next time Railroader starts.");
       section.AddLabel(() => MapInGameSaved != MapPlusMod.MapEnabled ? ModsTab.Note("Restart Railroader to apply this.") : "", UIPanelBuilder.Frequency.Periodic);
+      ModsTab.Toggle(section, "Open the map where you are", () => OpenAtCamera, SetOpenAtCamera, "On: the game's map opens centred on your camera every time, as the Locate Me button does. Off: like the game, it opens where you left it.");
       ModsTab.Toggle(section, "Click selects the train", () => ClickSelects, SetClickSelects, "On: a click on a car or locomotive on the game's map selects its train and opens the Inspect window. Off: like the game's own map, a click opens the Inspect window and Shift-click selects the train.");
     });
   }
 
   internal static bool ClickSelects => _clickSelects ??= GlobalPreferences.GetInt(ClickSelectsKey, 0) != 0;
+
+  internal static bool OpenAtCamera => _openAtCamera ??= GlobalPreferences.GetInt(OpenAtCameraKey, 0) != 0;
+
+  private static void SetOpenAtCamera(bool on)
+  {
+    _openAtCamera = on;
+    GlobalPreferences.SetInt(OpenAtCameraKey, on ? 1 : 0);
+    GlobalPreferences.Flush();
+  }
 
   private static void SetClickSelects(bool on)
   {

@@ -91,6 +91,55 @@ internal static class Fuel
     return locomotive;
   }
 
+  internal static List<Car> FuelCars(BaseLocomotive locomotive)
+  {
+    var cars = new List<Car>();
+    var own = FuelCar(locomotive);
+    if (own != null) cars.Add(own);
+    foreach (var engine in locomotive.EnumerateCoupled().OfType<BaseLocomotive>())
+    {
+      var car = FuelCar(engine);
+      if (car != null && !cars.Contains(car)) cars.Add(car);
+    }
+    return cars;
+  }
+
+  internal static Car NextCar(BaseLocomotive locomotive, IEnumerable<Car> cars, FuelStop stop)
+  {
+    var coupled = new HashSet<Car>(locomotive.EnumerateCoupled());
+    Car best = null;
+    var bestOffset = float.MaxValue;
+    foreach (var car in cars)
+    {
+      if (!coupled.Contains(car)) continue;
+      var slot = Slot(car, stop.Load);
+      if (slot == null || IsFull(slot, stop.Load)) continue;
+      var offset = Offset(slot, stop);
+      if (offset >= bestOffset) continue;
+      best = car;
+      bestOffset = offset;
+    }
+    return best;
+  }
+
+  internal static (FuelStop Stop, Car Car) Nearest(BaseLocomotive locomotive, IEnumerable<Car> cars, IEnumerable<FuelStop> stops)
+  {
+    FuelStop bestStop = null;
+    Car bestCar = null;
+    var best = float.MaxValue;
+    foreach (var stop in stops)
+    {
+      var car = NextCar(locomotive, cars, stop);
+      if (car == null) continue;
+      var offset = Offset(Slot(car, stop.Load), stop);
+      if (offset >= best) continue;
+      best = offset;
+      bestStop = stop;
+      bestCar = car;
+    }
+    return (bestStop, bestCar);
+  }
+
   internal static List<(FuelSlot Slot, Load Load)> Slots(Car car)
   {
     var result = new List<(FuelSlot, Load)>();
@@ -433,7 +482,7 @@ internal static class Fuel
 
   private static bool CanRoute(BaseLocomotive locomotive, List<Car> cars, float length, bool forward, OrderWaypoint waypoint)
   {
-    return AutoEngineerPlanner.TryPlanRoute(locomotive, cars, length, forward, waypoint, Graph.Shared, out _, out _, out _, out _);
+    return AutoEngineerPlanner.TryPlanRoute(locomotive, cars, length, forward, waypoint, Graph.Shared, out _, out _, out _, out _, out _);
   }
 
   private static float Gap(Graph graph, Car first, Car second)

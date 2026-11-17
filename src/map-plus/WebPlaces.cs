@@ -146,8 +146,8 @@ internal static class WebPlaces
     var last = stop.LastServed;
     double? hours = last.HasValue ? Math.Round(Math.Max(0, TimeWeather.Now.TotalSeconds - last.Value.TotalSeconds) / 3600.0, 1) : null;
     var total = stop.Waiting.Values.Sum(info => info.Total);
-    if (!full) return new { total, d = waiting, h = hours, flag = stop.flagStop };
-    return new { total, d = waiting, h = hours, flag = stop.flagStop, pop = stop.basePopulation + stop.AdditionalPopulation, code = stop.timetableCode };
+    if (!full) return new { total, d = waiting, h = hours };
+    return new { total, d = waiting, h = hours, pop = stop.basePopulation + stop.AdditionalPopulation, code = stop.timetableCode };
   }
 
   private static object CarRow(Car car, string state)

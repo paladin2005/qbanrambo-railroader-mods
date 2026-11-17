@@ -18,7 +18,7 @@ To play, download them from Nexus Mods. This repository is for reading the code 
 
 ## Building
 
-You need the [.NET SDK](https://dotnet.microsoft.com/download) (6 or later) and Railroader 0.6 installed. The projects target .NET Framework 4.7.2 and reference the game's own assemblies in `Railroader_Data/Managed`, which aren't part of this repository. Tell the build where the game is with the `RAILROADER_DIR` environment variable or the `RailroaderDir` property:
+You need the [.NET SDK](https://dotnet.microsoft.com/download) (6 or later) and Railroader 0.6.3 or later installed. The projects target .NET Framework 4.7.2 and reference the game's own assemblies in `Railroader_Data/Managed`, which aren't part of this repository. Tell the build where the game is with the `RAILROADER_DIR` environment variable or the `RailroaderDir` property:
 
 ```
 dotnet build src/goto -c Release -p:RailroaderDir="C:\Program Files (x86)\Steam\steamapps\common\Railroader"

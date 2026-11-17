@@ -20,7 +20,7 @@ internal static class CarContextMenuPatch
   }
 }
 
-[HarmonyPatch(typeof(PopupMenu), nameof(PopupMenu.PresentAt), new[] { typeof(Canvas), typeof(Vector2), typeof(IReadOnlyList<MenuItem>), typeof(string), typeof(Action) })]
+[HarmonyPatch(typeof(PopupMenu), nameof(PopupMenu.PresentAt), new[] { typeof(Canvas), typeof(Vector2), typeof(Vector2), typeof(IReadOnlyList<MenuItem>), typeof(string), typeof(Action) })]
 internal static class PopupMenuPatch
 {
   private const string ContextMenuOwner = "Context Menu";

@@ -160,7 +160,7 @@ internal static class MapWaypoints
     var waypoint = new OrderWaypoint(Graph.LocationToString(location), null);
     foreach (var direction in new[] { forward, !forward })
     {
-      if (AutoEngineerPlanner.TryPlanRoute(locomotive, cars, length, direction, waypoint, Graph.Shared, out _, out _, out var message, out _)) return true;
+      if (AutoEngineerPlanner.TryPlanRoute(locomotive, cars, length, direction, waypoint, Graph.Shared, out _, out _, out var message, out _, out _)) return true;
       failure ??= message;
     }
     return false;

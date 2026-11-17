@@ -4,7 +4,7 @@ Chained orders for Railroader's auto engineer (AE). Queue up waypoints, coupling
 
 ## Requirements
 
-- Railroader 0.6.0 or later (the MoW Update; on the Steam **experimental** branch when this was released).
+- Railroader 0.6.3 or later (the MoW Update; on the Steam **experimental** branch when this was released). 0.6.3 changed the game's code this mod calls, so this version needs it, and earlier versions of the mod don't work on it.
 - **Allow Unsafe DLL Mods** turned on (see Install).
 - Nothing else: no Unity Mod Manager, BepInEx or other loader. Railroader loads the mod itself.
 - Optional: **QbanRambo's Goto** for picking destinations, fuel loaders and turntables by name, coupling to waiting cars and a smart entrance into dead ends (it also adds a **Go to** button to the window), and **Map Plus** for setting waypoints with a right-click on the map and seeing a train's orders on the map. Both work with Train Orders.
@@ -30,7 +30,7 @@ The **Add** buttons are icons; hover one for its name. From left to right:
 - **Go to** (a pin, only with QbanRambo's Goto installed): the towns you've unlocked and their locations, the same as Goto's **Towns**. Pick one to add a trip there. Passenger stations become station orders, like the **Stations** button.
 - **Pick up** (a car with an arrow): see Picking up cars below.
 - **Leave cars > Last N cars**: the engineer stops, sets the handbrake on the car at the cut, closes the air on both sides, disconnects the hoses and uncouples the last N cars. When the engine has cars on both sides, or will have once the orders already in the list have run, **Leave cars** splits into **Front** and **Rear** (front is the engine's cab end), so you can drop the cars ahead of the engine; the window shows how many are in front and behind right now. **All cars** leaves every car on that end, counted when the cut happens. **Keep > Keep N cars** works the other way round: it keeps the N cars next to the engine and leaves all the rest, however long the train is. A cut never leaves a locomotive or tender: it stops at the first one, so with several engines in the train they all stay together.
-- **Wait > Until loaded**: the train waits where it is until every freight car is full and the industry has finished with it (given it its next waybill), then goes on. **Until unloaded** waits until they're all empty, for example at the mill you delivered to. **Until not spotted** waits until no car of the train is at its waybill destination any more, so every car has been worked and has its next waybill: for a train with loads and empties mixed, at an industry that loads some cars and unloads others. **Until repaired** waits on a repair track until every car reaches its repair limit; a heavily worn car only gets as far as the game allows until its next overhaul. These orders show how many cars are full, empty or repaired.
+- **Wait > Until loaded**: the train waits where it is until every freight car is full and the industry has finished with it (given it its next waybill), then goes on. **Until unloaded** waits until they're all empty, for example at the mill you delivered to. **Until the coaches are full** waits at a station until every seat is taken, and goes on anyway if nobody boards for an hour; tick **Or leave at** on its second line to leave at a set time even if they aren't full. **Until the train has** 1 to 30 cars waits while other engines bring cars to it, for a train put together in a yard. **Until not spotted** waits until no car of the train is at its waybill destination any more, so every car has been worked and has its next waybill: for a train with loads and empties mixed, at an industry that loads some cars and unloads others. **Until repaired** waits on a repair track until every car reaches its repair limit; a heavily worn car only gets as far as the game allows until its next overhaul. These orders show how many cars are full, empty or repaired.
 - **Wait > Wait time**: **Until tomorrow** waits until the next day starts at midnight, when industries take their next share of cars, so a log run doesn't fill the mill beyond what it takes in a day. **Until 06:00** (or whatever hour your company serves the interchange, in Company > Settings) waits until the morning, when the game's Sleep wakes you. **Until a time** waits for the hour and minutes you set on the order's **Time** line; a time already past today waits until tomorrow, so a list on Repeat runs to a schedule. **Minutes** waits 5 to 45 minutes and **Hours** 1 to 12 hours. The order counts down, and the game's Wait and Sleep buttons count too.
 - **Leave cars > Run around the cars in front / behind**: see Run around below.
 - **Go back** (a circular arrow): pick an order of the list, then **Until a time** or **Times** (once to 20). When the list reaches it, it goes back to that order until the time you set on its **Time** line, or that many times, then goes on with the next one. For example: go to the mill, wait until loaded, go to the interchange, wait until unloaded, go back to order 1 until 18:00, refuel, go to the shed, wait until 6:00, with Repeat on. A loop reached less than 6 hours after its time is skipped, so one that comes round at 21:30 with 21:00 set doesn't run until 21:00 the next day. The link to the order survives moving orders, Copy and Paste and saved jobs.
@@ -52,7 +52,7 @@ Click **Start**. The engineer runs the orders in turn:
 
 Orders stay in the list when they're done: finished ones are dimmed, the current one is highlighted and the rest are white. When the last one is done, **Start** runs the list again from the top, and **Clear** empties it. Turn on **Repeat** to have it start over by itself, for runs like loading logs, taking them to the mill and waiting until tomorrow.
 
-Each order has buttons to move it up or down and to remove it; **Shift+click** on up or down makes it the first or the last order. **Pause**, **Skip** and **Clear** do what they say; Clear also unticks Repeat. The two buttons at the right copy and paste orders: **Copy** takes this locomotive's list, and **Paste** in another locomotive's window adds it to the end of that list (with Repeat, when that list was empty). Handy when an engine goes to the shop or is sold. The copy lasts until you load another game; to keep a list for good, save it as a job (see Saved jobs below). The **Engineer** line shows what the engineer is doing right now, so you can see when it's waiting at a switch or a signal.
+Each order has buttons to move it up or down and to remove it; **Shift+click** on up or down makes it the first or the last order. **Pause**, **Skip** and **Clear** do what they say; Clear also unticks Repeat. **Clear done** removes the orders already done, above the current one (not on Repeat, where they run again; an order a later Go back or Couple to points at stays). The two buttons at the right copy and paste orders: **Copy** takes this locomotive's list, and **Paste** in another locomotive's window adds it to the end of that list (with Repeat, when that list was empty). Handy when an engine goes to the shop or is sold. The copy lasts until you load another game; to keep a list for good, save it as a job (see Saved jobs below). The **Engineer** line shows what the engineer is doing right now, so you can see when it's waiting at a switch or a signal.
 
 The orders pause by themselves, with the reason shown, when the engineer can't find a route, stops on the wrong track, or you change its orders by hand, and when loading or unloading stops for two game hours (a car the industry doesn't load or unload, or it ran out of stock or room). Click **Start** to go on.
 
@@ -115,7 +115,7 @@ The bridge is lined up with the track the engine comes from and turned for you, 
 Add the stations of a route from **Add > Stations**, for example "Go to Sylva Depot" and "Go to Dillsboro Depot", turn on **Repeat** and click **Start**. You don't need to set any waypoints or tick any stations in the cars:
 
 - The engineer heads for each station in turn, stops with the passenger cars at the platform and waits until everyone has got on and off, as the game's own passenger stops do.
-- While the orders run, every station in the list stays ticked on all the passenger cars in the train. The game unticks a station when the train stops there, so the mod ticks it again once the train has left the platform, and passengers keep boarding for it lap after lap.
+- While the orders run, the stations ahead stay ticked on all the passenger cars in the train. The game unticks a station when the train stops there, so the mod ticks it again once the train has left the platform, and passengers keep boarding for it lap after lap. On a loop (Repeat or Go back), "ahead" means the stations until the train turns back: on Whittier, Ela, Bryson, Ela, the coaches leaving Ela for Bryson take people for Bryson only, and on the way back for Whittier only.
 - Without **Repeat**, only the stations still ahead stay ticked: the ones the train has already visited are unticked, so nobody boards for a stop it won't come back to, and the coaches don't end the run full.
 - The train also stops at any other station of the list it passes on the way.
 - Put a **Wait time** after a station to stay longer: passengers keep boarding while the train waits.
@@ -149,7 +149,7 @@ For example, with **Repeat** on: Timetable train 1 E, its stations, a run around
 
 A refuel order, such as "Refuel coal and water at Whittier", has a second line, **Only below**: 25%, 50% (the default), 75% or **Always**. When the order's turn comes:
 
-- If any of its fuels is below that level, the engineer brings the train to the loader with the tender's filler right under the spout, lowers it, opens the water hatch and fills every fuel of the order to the top, then puts the spout away and closes the hatch. The order shows the level while it fills.
+- If any of its fuels is below that level, the engineer brings the train to the loader with the tender's filler right under the spout, lowers it, opens the water hatch and fills every fuel of the order to the top, then puts the spout away and closes the hatch. The order shows the level while it fills. With two or more locomotives coupled together, it fills each of them, always going to the nearest fill next, so the train works along the loaders.
 - If they're all above it, the order is done straight away and the next one starts. On a loop, the train only refuels when it needs to.
 
 A loader out of stock is skipped with a message (coal and diesel come from the town's engine service industry; water never runs out). If the train can't line up with the spout after three tries, the orders pause. Pausing, skipping or clearing the orders while it fills puts the spout away. A refuel picked from Goto's **Refuel** menu while the window is open becomes a refuel order at 50%.
@@ -158,7 +158,7 @@ A loader out of stock is skipped with a message (coal and diesel come from the t
 
 The engineer obeys the signals. A red automatic signal out on the line only makes it stop and go on slowly, but a red signal at a switch (an interlocking) makes it wait until the signal clears. With the signal system in CTC mode, someone has to clear those on the CTC panel. In ABS mode they clear by themselves, but they can stay red when the train itself is in the block ahead or a switch in it is thrown.
 
-Turn on **Smart signals**, next to Repeat, and when the train has waited 10 seconds at a red signal at a switch in ABS mode, the engineer passes it at restricted speed, as with the game's **Pass Signal** button, but only when the way is clear: no other train in the blocks past the signal, and no other running train (moving, on the engineer or running Train Orders) on the tracks around the interlocking, station tracks and sidings included, or in the blocks beyond it. Parked cars and idle engines don't hold it up. When two trains with Smart signals wait at the same interlocking, one goes first and the other waits for it. A message says which train it's waiting for. It does nothing in CTC mode, where you're the dispatcher.
+Turn on **Smart signals**, next to Repeat, and when the train has waited 10 seconds at a red signal at a switch in ABS mode, the engineer passes it at restricted speed, as with the game's **Pass Signal** button, but only when the way is clear: no other train in the blocks past the signal (the cars the train is going for, to run around or couple to, don't count), and no other running train (moving, on the engineer or running Train Orders) on the tracks around the interlocking, station tracks and sidings included, or in the blocks beyond it. Parked cars and idle engines don't hold it up. When two trains with Smart signals wait at the same interlocking, one goes first and the other waits for it. A message says which train it's waiting for. It does nothing in CTC mode, where you're the dispatcher.
 
 ### Smart entrance
 
@@ -166,7 +166,7 @@ An order added with Goto's dead-end submenu has a **Smart entrance** box. Checke
 
 ### Settings
 
-**Preferences > Mods** (from the main menu or with Esc) has a **Train Orders** section with **Air and handbrakes after coupling** and **One window for the selected train**, and **QbanRambo's mods** with the update check. The tab is shared with other mods that put their settings there.
+**Preferences > Mods** (from the main menu or with Esc) has a **Train Orders** section with **Air and handbrakes after coupling**, **Start with the first order** (off by default: adding an order to an empty list starts the orders), **Take a shorter way when one opens** (on by default: while a train runs its orders, every 30 seconds the engineer looks for a way to the waypoint that's clearly shorter than the one it's on, for when the train that was in the way has gone, and takes it; the game's own reroute is Shift+click on the waypoint button) and **One window for the selected train**, and **QbanRambo's mods** with the update check. The tab is shared with other mods that put their settings there.
 
 ### On the web map
 
@@ -187,6 +187,23 @@ Once a session, when a game loads, the mod asks Nexus Mods whether the QbanRambo
 Clear the orders of your locomotives, then disable **Train Orders** in **Mods**, or delete its folder from `Documents\Railroader\Mods`, and restart the game.
 
 ## Changelog
+
+### 1.11.1
+
+- Fixed: on Railroader 0.6.3, **Train Orders** was missing from the locomotive's right-click menu (the list button in the **Engine Roster** still opened it).
+
+### 1.11.0
+
+- **Updated for Railroader 0.6.3: the game update changed code the mod calls, so the earlier versions broke on it (route checks failed); this version needs 0.6.3 or later.**
+- **Refuel** fills every locomotive of the train, one after the other, not only the one running the orders, always going to the nearest fill next.
+- **Wait > Until the coaches are full**: at a station, waits until every seat is taken, and goes on if nobody boards for an hour; **Or leave at** on its second line leaves at a set time even if they aren't full.
+- **Wait > Until the train has** 1 to 30 cars: waits while other engines bring cars to it.
+- **Take a shorter way when one opens** (Preferences > Mods > Train Orders, on by default): while a train runs its orders, the engineer switches to a clearly shorter way to the waypoint when one opens up, such as when the train that was in the way has gone.
+- **Clear done** removes the orders already done, above the current one.
+- **Start with the first order** (Preferences > Mods > Train Orders, off by default): adding an order to an empty list starts the orders.
+- Fixed: on a loop, the coaches picked up passengers for every station of the list, behind the train too; now only for the stations ahead until the train turns back.
+- Fixed: a coupling to a car the engine already stands against (on Repeat, after leaving it there) got stuck; the engine now backs off a little and couples again.
+- Fixed: **Smart signals** waited at a red signal when the only cars in the block ahead were the ones the train was going for, such as the cars it had just left for a run around.
 
 ### 1.10.0
 

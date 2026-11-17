@@ -76,6 +76,12 @@ internal static class WebOrders
         case "clear":
           OrderActions.Clear(locomotive);
           break;
+        case "cleardone":
+          if (!OrderList.Read(locomotive).Repeat) OrderActions.ClearDone(locomotive);
+          break;
+        case "leave":
+          OrderActions.SetFullTime(locomotive, Int(input, "index"), Int(input, "value"));
+          break;
         case "repeat":
           OrderActions.SetRepeat(locomotive, Bool(input, "on"));
           break;
@@ -184,6 +190,7 @@ internal static class WebOrders
       running = orders.Running,
       finished = orders.Finished,
       count = orders.Steps.Count,
+      done = orders.Repeat ? 0 : orders.Finished ? orders.Steps.Count : orders.Current,
       paste = OrderActions.HasCopy ? OrderActions.CopyDescription : null,
       menus = Menus.Where(menu => menu.Id != "goto" || hasGoto).Select(menu => new { id = menu.Id, title = menu.Title, tip = menu.Tip }).ToList(),
       rows,
@@ -246,6 +253,8 @@ internal static class WebOrders
         StepKind.WaitDay or StepKind.WaitHours or StepKind.WaitMinutes or StepKind.WaitTime => OrderActions.TimeLeft(step),
         StepKind.WaitRepair => Repairs.Progress(locomotive),
         StepKind.WaitSpotted => OrderActions.SpottedProgress(locomotive),
+        StepKind.WaitFull => OrderActions.SeatsProgress(locomotive),
+        StepKind.WaitCars => OrderActions.CarsProgress(locomotive),
         StepKind.Move or StepKind.Station => Dispatcher.IsBoarding(locomotive) ? "boarding" : null,
         StepKind.Refuel => Dispatcher.RefuelDetail(locomotive),
         StepKind.Turntable => Dispatcher.TurntableDetail(locomotive),
@@ -272,6 +281,14 @@ internal static class WebOrders
     if (step.HasCoupleSide)
     {
       controls.Add(new { k = "side", l = "Couple at", o = OrderActions.CoupleSides.Select(option => new { v = ((int)option.Side).ToString(), l = option.Label }).ToList(), v = ((int)step.Side).ToString() });
+    }
+    if (step.Kind == StepKind.WaitFull)
+    {
+      var times = Enumerable.Range(0, 48).Select(slot => slot * 30).ToList();
+      if (step.Count >= 0 && !times.Contains(step.Count)) times.Add(step.Count);
+      var options = new List<object> { new { v = OrderStep.NoTime.ToString(), l = "Only when full" } };
+      options.AddRange(times.OrderBy(minute => minute).Select(minute => (object)new { v = minute.ToString(), l = OrderActions.ClockMinute(minute) }));
+      controls.Add(new { k = "leave", l = "Or leave at", o = options, v = step.Count.ToString() });
     }
     if (OrderActions.HasTime(step))
     {

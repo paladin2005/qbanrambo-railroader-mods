@@ -3,7 +3,7 @@
   <PropertyGroup>
     <AssemblyName>QbanRambo.MapPlus</AssemblyName>
     <RootNamespace>QbanRambo.MapPlus</RootNamespace>
-    <Version>1.8.0</Version>
+    <Version>1.9.1</Version>
     <Product>Map Plus</Product>
     <Authors>QbanRambo</Authors>
     <Company>QbanRambo</Company>

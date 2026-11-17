@@ -67,3 +67,12 @@ internal static class ZoomScalePatch
     }
   }
 }
+
+[HarmonyPatch(typeof(MapWindow), "_Show")]
+internal static class OpenAtCameraPatch
+{
+  private static void Prefix(Vector3? gamePosition, ref bool ____hasSetMapCenter)
+  {
+    if (!gamePosition.HasValue && MapPlusConfig.OpenAtCamera) ____hasSetMapCenter = false;
+  }
+}

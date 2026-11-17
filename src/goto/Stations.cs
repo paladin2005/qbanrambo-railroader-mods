@@ -77,7 +77,7 @@ internal static class Stations
   private static float? RouteDistance(BaseLocomotive locomotive, List<Car> cars, float length, bool forward, Location location)
   {
     var waypoint = new OrderWaypoint(Graph.LocationToString(location), null);
-    return AutoEngineerPlanner.TryPlanRoute(locomotive, cars, length, forward, waypoint, Graph.Shared, out _, out _, out _, out var distance) ? distance : null;
+    return AutoEngineerPlanner.TryPlanRoute(locomotive, cars, length, forward, waypoint, Graph.Shared, out _, out _, out _, out var distance, out _) ? distance : null;
   }
 
   private static bool Contains(TrackSpan span, Location location)

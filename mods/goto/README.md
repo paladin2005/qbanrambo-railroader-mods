@@ -4,7 +4,7 @@ Adds **Go to** to a locomotive's context menu in Railroader 0.6. Pick a destinat
 
 ## Requirements
 
-- Railroader 0.6.0 or later (the MoW Update; on the Steam **experimental** branch when this was released).
+- Railroader 0.6.3 or later (the MoW Update; on the Steam **experimental** branch when this was released). 0.6.3 changed the game's code this mod calls, so this version needs it, and earlier versions of the mod don't work on it.
 - **Allow Unsafe DLL Mods** turned on (see Install).
 - Nothing else: no Unity Mod Manager, BepInEx or other loader. Railroader loads the mod itself.
 
@@ -61,7 +61,7 @@ When the engine's crew runs a train of the game's timetable (Company > Crews > T
 
 **Go to > Refuel** shows the locomotive's fuel levels and lists the loaders it can use: water towers, water columns and coaling towers for a steam locomotive, diesel stands for a diesel. The nearest are at the top, with the town and distance. Yards with coal and water next to each other also get a **Coal and water** entry that does both in one go. A fuel that's already full, or a loader whose stock has run out, is greyed out.
 
-Click one and the engineer brings the train in so the tender's filler (or the locomotive's, on a tank engine or a diesel) stops right under the spout, with cars coupled or not, engine first or tender first. Then the spout comes down, the water hatch opens and the tender fills up. When it's full, the spout goes back up and the hatch closes. If the train stops a little off, it backs up and tries again, up to three times. Moving the train while it fills stops the refuelling.
+Click one and the engineer brings the train in so the tender's filler (or the locomotive's, on a tank engine or a diesel) stops right under the spout, with cars coupled or not, engine first or tender first. Then the spout comes down, the water hatch opens and the tender fills up. When it's full, the spout goes back up and the hatch closes. If the train stops a little off, it backs up and tries again, up to three times. Moving the train while it fills stops the refuelling. With two or more locomotives coupled together, each one is filled, always the nearest fill next, so the train works along the loaders.
 
 Coal and diesel come from the stock of the town's engine service industry, which you keep up by delivering coal and diesel there. Water never runs out.
 
@@ -117,6 +117,15 @@ Once a session, when a game loads, the mod asks Nexus Mods whether the QbanRambo
 Disable **QbanRambo's Goto** in **Mods**, or delete its folder from `Documents\Railroader\Mods`, and restart the game. It doesn't change your saves.
 
 ## Changelog
+
+### 1.9.1
+
+- Fixed: on Railroader 0.6.3, **Go to** was missing from the locomotive's right-click menu (the **Go to** button on the engineer's panel still worked).
+
+### 1.9.0
+
+- **Updated for Railroader 0.6.3: the game update changed code the mod calls, so the earlier versions broke on it (Go to and refuel couldn't plan their routes); this version needs 0.6.3 or later.**
+- **Refuel** fills every locomotive of the train, one after the other, not only the one you sent, always going to the nearest fill next.
 
 ### 1.8.1
 

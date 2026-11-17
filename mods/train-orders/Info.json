@@ -1,6 +1,6 @@
 {
   "identifier": "qbanrambo/train-orders",
-  "version": "1.10.0",
+  "version": "1.11.1",
   "name": "Train Orders",
   "author": "QbanRambo",
   "url": "https://www.nexusmods.com/railroader/mods/1901",
@@ -9,7 +9,7 @@
   "assemblies": ["QbanRambo.TrainOrders.dll"],
   "dependencies": {
     "required": [
-      "rr/game >=0.6.0"
+      "rr/game >=0.6.3"
     ]
   }
 }

@@ -275,6 +275,8 @@ internal sealed class OrdersWindow : BuilderWindowBase
             StepKind.WaitDay or StepKind.WaitHours or StepKind.WaitMinutes or StepKind.WaitTime => () => OrderActions.TimeLeft(step),
             StepKind.WaitRepair => () => Repairs.Progress(locomotive),
             StepKind.WaitSpotted => () => OrderActions.SpottedProgress(locomotive),
+            StepKind.WaitFull => () => OrderActions.SeatsProgress(locomotive),
+            StepKind.WaitCars => () => OrderActions.CarsProgress(locomotive),
             StepKind.Move or StepKind.Station => () => Dispatcher.IsBoarding(locomotive) ? "boarding" : null,
             StepKind.Refuel => () => Dispatcher.RefuelDetail(locomotive),
             StepKind.Turntable => () => Dispatcher.TurntableDetail(locomotive),
@@ -286,7 +288,7 @@ internal sealed class OrdersWindow : BuilderWindowBase
           {
             var tracks = step.Kind == StepKind.Station ? OrderActions.TrackOptions(step.StationId) : null;
             var hasTracks = tracks != null && tracks.Count > 2;
-            entry.ConfigureLayout(step.Kind is StepKind.Refuel or StepKind.Turntable or StepKind.Timetable || OrderActions.HasTime(step) || step.IsCouple || step.HasCoupleSide || hasForecast || hasTracks ? RefuelLineSpacing : StepLineSpacing);
+            entry.ConfigureLayout(step.Kind is StepKind.Refuel or StepKind.Turntable or StepKind.Timetable or StepKind.WaitFull || OrderActions.HasTime(step) || step.IsCouple || step.HasCoupleSide || hasForecast || hasTracks ? RefuelLineSpacing : StepLineSpacing);
             KeepHeights(entry.HStack(row =>
             {
               row.ConfigureLayout(RowButtonSpacing);
@@ -315,6 +317,36 @@ internal sealed class OrdersWindow : BuilderWindowBase
                   if (picked >= 0 && picked < OrderActions.BelowOptions.Length && OrderActions.BelowOptions[picked] != step.Count) OrderActions.Run(() => OrderActions.SetBelow(locomotive, index, OrderActions.BelowOptions[picked]));
                 })
                   .Width(BelowWidth);
+                line.Spacer().FlexibleWidth();
+              });
+              return;
+            }
+            if (step.Kind == StepKind.WaitFull)
+            {
+              entry.HStack(line =>
+              {
+                line.ConfigureLayout(RowButtonSpacing);
+                line.Spacer(SmartIndent);
+                var timed = step.Count >= 0;
+                line.AddToggle(() => timed, on => OrderActions.Run(() => OrderActions.SetFullTime(locomotive, index, on ? OrderActions.NextHour() : OrderStep.NoTime)))
+                  .Tooltip("Or leave at", "Leave at this time even if the coaches aren't full yet: today if it hasn't come, else tomorrow.");
+                line.AddLabel(string.Format(style == CurrentStyle ? PlainStyle : style, "Or leave at"));
+                if (timed)
+                {
+                  var hour = step.Count / 60;
+                  var minute = step.Count % 60;
+                  line.AddDropdown(OrderActions.HourLabels, hour, picked =>
+                  {
+                    if (picked >= 0 && picked < OrderActions.HourLabels.Count && picked != hour) OrderActions.Run(() => OrderActions.SetFullTime(locomotive, index, picked * 60 + minute));
+                  })
+                    .Width(TimeWidth);
+                  var minuteChoice = Array.IndexOf(OrderActions.MinuteOptions, minute);
+                  line.AddDropdown(OrderActions.MinuteOptions.Select(option => $":{option:D2}").ToList(), minuteChoice < 0 ? 0 : minuteChoice, picked =>
+                  {
+                    if (picked >= 0 && picked < OrderActions.MinuteOptions.Length && OrderActions.MinuteOptions[picked] != minute) OrderActions.Run(() => OrderActions.SetFullTime(locomotive, index, hour * 60 + OrderActions.MinuteOptions[picked]));
+                  })
+                    .Width(TimeWidth);
+                }
                 line.Spacer().FlexibleWidth();
               });
               return;
@@ -478,7 +510,7 @@ internal sealed class OrdersWindow : BuilderWindowBase
         }
         MenuButton(row, icons, Icons.PickUpName, "Pick up", "Pick up cars", "Add an order to pick up cars: the train couples to the nearest standing cars and takes that many, leaving the rest.", () => OrderActions.PickUpItems(locomotive));
         MenuButton(row, icons, Icons.CutName, "Leave cars", "Leave cars", "Add an order to leave cars behind: the front or rear ones, a few or all of them.", () => OrderActions.CutItems(locomotive));
-        MenuButton(row, icons, Icons.WaitName, "Wait", "Wait", "Add a wait: until the cars are loaded, unloaded or no longer spotted, until tomorrow, or for some hours.", () => OrderActions.WaitItems(locomotive));
+        MenuButton(row, icons, Icons.WaitName, "Wait", "Wait", "Add a wait: until the cars are loaded, unloaded or no longer spotted, until the coaches are full, until tomorrow, or for some hours.", () => OrderActions.WaitItems(locomotive));
         MenuButton(row, icons, Icons.GoBackName, "Go back", "Go back", "Add a loop: go back to an earlier order until a time or a number of times, then go on. Or hand the engine over to a saved job.", () => OrderActions.GoBackItems(locomotive));
         MenuButton(row, icons, Icons.SpeedName, "Speed", "Set speed", "Add a speed: the trips after it run at that speed until another Set speed order.", () => OrderActions.SpeedItems(locomotive));
         MenuButton(row, icons, Icons.StationName, "Stations", "Stations", "Add a stop at a passenger station, or run the train as a train of the game's timetable.", () => OrderActions.StationItems(locomotive));
@@ -493,6 +525,9 @@ internal sealed class OrdersWindow : BuilderWindowBase
       strip.AddButton(orders.Running ? "Pause" : "Start", () => OrderActions.Run(() => OrderActions.SetRunning(locomotive, !orders.Running))).Disable(orders.Steps.Count == 0);
       strip.AddButton("Skip", () => OrderActions.Run(() => OrderActions.Skip(locomotive))).Disable(orders.Finished);
       strip.AddButton("Clear", () => OrderActions.Run(() => OrderActions.Clear(locomotive))).Disable(orders.Steps.Count == 0);
+      strip.AddButton("Clear done", () => OrderActions.Run(() => OrderActions.ClearDone(locomotive)))
+        .Disable(orders.Repeat || (orders.Finished ? orders.Steps.Count : orders.Current) == 0)
+        .Tooltip("Clear done", orders.Repeat ? "Not on Repeat: the done orders run again" : "Remove the orders already done, above the current one. Orders a later Go back or Couple to points at stay.");
       strip.Spacer().FlexibleWidth();
       var icons = Icons.EnsureButtons();
       IconButton(strip, icons, Icons.CopyName, "Copy", "Copy orders", "Copy these orders to paste them into another locomotive's orders", () => OrderActions.Copy(locomotive))

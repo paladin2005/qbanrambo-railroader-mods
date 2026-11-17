@@ -1839,6 +1839,7 @@ function ordersBodyHtml(view) {
     + `<button data-orders="run"${view.count ? '' : ' disabled'}>${view.running ? 'Pause' : 'Start'}</button>`
     + `<button data-orders="skip"${view.finished ? ' disabled' : ''}>Skip</button>`
     + `<button data-orders="clear"${view.count ? '' : ' disabled'}>Clear</button>`
+    + `<button data-orders="cleardone" title="Remove the orders already done, above the current one"${view.done ? '' : ' disabled'}>Clear done</button>`
     + '<span class="spacer"></span>'
     + `<button class="icon" data-orders="copy" title="Copy these orders to paste them into another locomotive's orders">${icon('copy')}</button>`
     + `<button class="icon" data-orders="paste" title="${escapeHtml(view.paste ? `Add the ${view.paste} to the end of these orders` : "Copy another locomotive's orders first")}"${view.paste ? '' : ' disabled'}>${icon('paste')}</button>`
@@ -2734,7 +2735,6 @@ function placeHtml(place) {
     parts.push(`<div class="field">Waiting: <b>${place.px.total}</b></div>`);
     for (const [name, count] of place.px.d) parts.push(`<div class="field">To ${escapeHtml(name)}: <b>${count}</b></div>`);
     parts.push(`<div class="field">Last train: <b>${place.px.h === null ? 'not yet' : ago(place.px.h)}</b></div>`);
-    if (place.px.flag) parts.push('<div class="field">Flag stop</div>');
   }
   for (const section of place.sec) {
     parts.push(`<div class="section">${escapeHtml(section.n)}</div>`);
@@ -3313,8 +3313,7 @@ function placePanelHtml(info) {
       ...info.px.d.map(([name, count]) => [`To ${name}`, String(count)]),
       ['Last train', info.px.h === null ? 'Not yet' : `${hoursText(info.px.h)} ago`],
       ['Population', String(info.px.pop)],
-      info.px.code ? ['Timetable code', escapeHtml(info.px.code)] : null,
-      info.px.flag ? ['Stop', 'Flag stop'] : null
+      info.px.code ? ['Timetable code', escapeHtml(info.px.code)] : null
     ]));
   }
   if (info.sec.length) {

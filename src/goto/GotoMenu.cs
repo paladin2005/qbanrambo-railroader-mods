@@ -408,7 +408,7 @@ internal static class GotoMenu
   private static float? RouteDistance(BaseLocomotive locomotive, List<Car> cars, float length, bool forward, Location location, ref string failure)
   {
     var waypoint = new OrderWaypoint(Graph.LocationToString(location), null);
-    if (AutoEngineerPlanner.TryPlanRoute(locomotive, cars, length, forward, waypoint, Graph.Shared, out _, out _, out var message, out var distance)) return distance;
+    if (AutoEngineerPlanner.TryPlanRoute(locomotive, cars, length, forward, waypoint, Graph.Shared, out _, out _, out var message, out var distance, out _)) return distance;
     failure ??= message;
     return null;
   }

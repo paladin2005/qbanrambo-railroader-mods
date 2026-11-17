@@ -32,7 +32,9 @@ internal enum StepKind
   GoBack,
   Timetable,
   WaitSpotted,
-  RunJob
+  RunJob,
+  WaitFull,
+  WaitCars
 }
 
 internal enum CutSide
@@ -148,6 +150,8 @@ internal sealed class OrderStep
     StepKind.GoBack => $"back|{From}|{Times}|{Count}",
     StepKind.Timetable => $"timetable|{Count}|{Symbol}",
     StepKind.RunJob => $"job|{Job}",
+    StepKind.WaitFull => $"full|{Count}",
+    StepKind.WaitCars => $"cars|{Count}",
     _ => Kind.ToString()
   };
 
@@ -161,6 +165,7 @@ internal sealed class OrderStep
       case StepKind.WaitDay:
       case StepKind.WaitTime:
       case StepKind.GoBack:
+      case StepKind.WaitFull:
         var target = now.Day * MinutesPerDay + (Kind == StepKind.WaitDay ? WaitHour * MinutesPerHour : Count);
         return target > minute ? target : target + MinutesPerDay;
       case StepKind.WaitMinutes:
@@ -251,6 +256,14 @@ internal sealed class OrderStep
 
   public static OrderStep WaitSpotted() => new(StepKind.WaitSpotted, null, 0);
 
+  public static OrderStep WaitFull() => new(StepKind.WaitFull, null, NoTime);
+
+  public const int NoTime = -1;
+
+  public OrderStep WithFullTime(int minuteOfDay) => Kind == StepKind.WaitFull ? new OrderStep(StepKind.WaitFull, null, minuteOfDay < 0 ? NoTime : minuteOfDay, id: Id) : this;
+
+  public static OrderStep WaitCars(int count) => new(StepKind.WaitCars, null, Math.Max(1, count));
+
   public static OrderStep RunJob(string name) => new(StepKind.RunJob, null, 0, job: name);
 
   public const int TimetableTrain = 0;
@@ -308,7 +321,7 @@ internal sealed class OrderStep
   {
     var values = new Dictionary<string, Value> { { KindKey, (int)Kind } };
     if (Waypoint.HasValue) values[WaypointKey] = Waypoint.Value.PropertyValue;
-    if (Kind is StepKind.Cut or StepKind.WaitHours or StepKind.WaitMinutes or StepKind.WaitTime or StepKind.Refuel or StepKind.PickUp or StepKind.SetSpeed or StepKind.GoBack || ((IsCouple || Kind is StepKind.WaitDay or StepKind.Timetable) && Count != 0)) values[CountKey] = Count;
+    if (Kind is StepKind.Cut or StepKind.WaitHours or StepKind.WaitMinutes or StepKind.WaitTime or StepKind.Refuel or StepKind.PickUp or StepKind.SetSpeed or StepKind.GoBack or StepKind.WaitCars || (Kind == StepKind.WaitFull && Count >= 0) || ((IsCouple || Kind is StepKind.WaitDay or StepKind.Timetable) && Count != 0)) values[CountKey] = Count;
     if (Side != CutSide.Auto) values[SideKey] = (int)Side;
     if (!string.IsNullOrEmpty(CutCarId)) values[CutCarKey] = CutCarId;
     if (Smart.HasValue) values[SmartKey] = Smart.Value;
@@ -350,6 +363,8 @@ internal sealed class OrderStep
       StepKind.WaitUnload => WaitUnload(),
       StepKind.WaitRepair => WaitRepair(),
       StepKind.WaitSpotted => WaitSpotted(),
+      StepKind.WaitFull => new OrderStep(kind, null, value[CountKey].IntValueOrDefault(NoTime), untilMinute: value[UntilKey].IsNull ? null : value[UntilKey].IntValueOrDefault(0)),
+      StepKind.WaitCars => WaitCars(value[CountKey].IntValueOrDefault(1)),
       StepKind.RunJob => NullIfEmpty(value[JobKey].StringValueOrDefault(null)) is { } job ? RunJob(job) : null,
       StepKind.WaitDay or StepKind.WaitHours or StepKind.WaitMinutes or StepKind.WaitTime => new OrderStep(kind, null, value[CountKey].IntValueOrDefault(0), untilMinute: value[UntilKey].IsNull ? null : value[UntilKey].IntValueOrDefault(0)),
       StepKind.Station => NullIfEmpty(value[StationKey].StringValueOrDefault(null)) is { } stationId ? ToStation(stationId, NullIfEmpty(value[TrackKey].StringValueOrDefault(null))) : null,
@@ -408,7 +423,51 @@ internal sealed class OrderList
 
   public List<string> Stations => StationsIn(Steps);
 
-  public List<string> StationsAhead => StationsIn(Repeat ? Steps : Steps.Skip(Current));
+  public List<string> StationsAhead
+  {
+    get
+    {
+      if (!Repeat && Steps.All(step => step.Kind != StepKind.GoBack)) return StationsIn(Steps.Skip(Current));
+      var ahead = new List<string>();
+      var index = Finished ? 0 : Current;
+      for (var walked = 0; walked < Steps.Count * 3; walked++)
+      {
+        if (index >= Steps.Count)
+        {
+          if (!Repeat) break;
+          index = 0;
+        }
+        var step = Steps[index];
+        if (step.Kind == StepKind.Station && !string.IsNullOrEmpty(step.StationId))
+        {
+          if (ahead.Contains(step.StationId)) break;
+          ahead.Add(step.StationId);
+        }
+        if (step.Kind == StepKind.GoBack && walked > 0 && IndexOfId(step.From) is var target && target >= 0 && target < index)
+        {
+          index = target;
+          continue;
+        }
+        index++;
+      }
+      return ahead;
+    }
+  }
+
+  public void ClearDone()
+  {
+    var done = Finished ? Steps.Count : Current;
+    var kept = Steps.Skip(done).ToList();
+    var needed = new HashSet<string>(kept.Where(step => step.From != null).Select(step => step.From));
+    var removed = 0;
+    for (var index = done - 1; index >= 0; index--)
+    {
+      if (Steps[index].Id != null && needed.Contains(Steps[index].Id)) continue;
+      Steps.RemoveAt(index);
+      removed++;
+    }
+    Current = Math.Max(0, Current - removed);
+  }
 
   private static List<string> StationsIn(IEnumerable<OrderStep> steps) => steps.Where(step => step.Kind == StepKind.Station).Select(step => step.StationId).Distinct().ToList();
 
@@ -477,9 +536,11 @@ internal sealed class OrderList
     Current = 0;
   }
 
+  private int _readCount = -1;
+
   public static OrderList Read(Car locomotive)
   {
-    var list = new OrderList();
+    var list = new OrderList { _readCount = 0 };
     var value = locomotive.KeyValueObject[Key];
     if (value.IsNull) return list;
     list.Running = value[RunningKey].BoolValueOrDefault(false);
@@ -503,11 +564,13 @@ internal sealed class OrderList
     }
     var current = value[CurrentKey].IntValueOrDefault(0);
     list.Current = current >= 0 && current <= list.Steps.Count ? current : 0;
+    list._readCount = list.Steps.Count;
     return list;
   }
 
   public void Write(Car locomotive)
   {
+    if (_readCount == 0 && Steps.Count > 0 && !Running && TrainOrdersSettings.AutoStart) Start();
     if (Steps.Count == 0 && !Running && !Repeat && !PassSignals && string.IsNullOrEmpty(Status))
     {
       locomotive.KeyValueObject[Key] = Value.Null();

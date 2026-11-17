@@ -59,6 +59,8 @@ internal static class OrderActions
       StepKind.GoBack => $"Go back to an earlier order{GoBackCondition(step)}",
       StepKind.Timetable => step.Count == OrderStep.TimetableNone ? "No timetable train" : step.Count == OrderStep.TimetableNext ? "Next timetable train" : $"Timetable train {TimetableTrains.Short(step.Symbol)}",
       StepKind.WaitSpotted => "Wait until no car is spotted",
+      StepKind.WaitFull => step.Count >= 0 ? $"Wait until the coaches are full or {ClockMinute(step.Count)}" : "Wait until the coaches are full",
+      StepKind.WaitCars => step.Count == 1 ? "Wait until the train has a car" : $"Wait until the train has {step.Count} cars",
       StepKind.RunJob => SavedJobs.Find(step.Job) != null ? $"Run the saved job \"{step.Job}\"" : $"Run the saved job \"{step.Job}\" (not saved any more)",
       _ => "Unknown order"
     };
@@ -330,6 +332,8 @@ internal static class OrderActions
     {
       MenuItem.Action("Until loaded", () => Run(() => AddWaitLoad(locomotive)), "Until every freight car is full"),
       MenuItem.Action("Until unloaded", () => Run(() => AddWaitUnload(locomotive)), "Until every freight car is empty"),
+      MenuItem.Action("Until the coaches are full", () => Run(() => Edit(locomotive, orders => orders.Add(OrderStep.WaitFull()))), "At a station, until every seat is taken; goes on if nobody boards for an hour"),
+      MenuItem.Submenu("Until the train has", () => CarCounts.Select(count => MenuItem.Action(count == 1 ? "1 car" : $"{count} cars", () => Run(() => Edit(locomotive, orders => orders.Add(OrderStep.WaitCars(count)))))).ToList(), "Until other engines have brought cars to it"),
       MenuItem.Action("Until not spotted", () => Run(() => Edit(locomotive, orders => orders.Add(OrderStep.WaitSpotted()))), "Until no car of the train is at its waybill destination, so every car has been worked"),
       MenuItem.Action("Until repaired", () => Run(() => Edit(locomotive, orders => orders.Add(OrderStep.WaitRepair()))), "On a repair track, until every car reaches its repair limit"),
       MenuItem.Submenu("Wait time", () => TimeItems(locomotive))
@@ -357,7 +361,24 @@ internal static class OrderActions
 
   internal static string ClockMinute(int minuteOfDay) => $"{minuteOfDay / 60}:{minuteOfDay % 60:D2}";
 
-  private static int NextHour() => (OrderStep.Minute(TimeWeather.Now) / 60 + 1) % 24 * 60;
+  private static readonly int[] CarCounts = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25, 30 };
+
+  internal static string CarsProgress(BaseLocomotive locomotive) => $"{Maneuvers.CarCount(locomotive)} now";
+
+  internal static void SetFullTime(Car locomotive, int index, int minuteOfDay)
+  {
+    Edit(locomotive, orders =>
+    {
+      if (index >= 0 && index < orders.Steps.Count) orders.Steps[index] = orders.Steps[index].WithFullTime(minuteOfDay);
+    });
+  }
+
+  internal static void ClearDone(Car locomotive)
+  {
+    Edit(locomotive, orders => orders.ClearDone());
+  }
+
+  internal static int NextHour() => (OrderStep.Minute(TimeWeather.Now) / 60 + 1) % 24 * 60;
 
   internal static void SetTime(Car locomotive, int index, int minuteOfDay)
   {
@@ -385,6 +406,12 @@ internal static class OrderActions
       ? MenuItem.Action("Run a saved job", null, "No saved jobs yet", disabled: true)
       : MenuItem.Submenu("Run a saved job", () => jobs.Select(job => MenuItem.Action(job.Name, () => Run(() => Edit(locomotive, list => list.Add(OrderStep.RunJob(job.Name)))), "When the orders get here, they change to this job")).ToList(), "Hand over to a saved job"));
     return items;
+  }
+
+  internal static string SeatsProgress(Car locomotive)
+  {
+    var (riders, seats) = Passengers.Seats(locomotive);
+    return seats == 0 ? "no passenger cars" : $"{riders} of {seats} seats";
   }
 
   internal static string SpottedProgress(Car locomotive)

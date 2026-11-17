@@ -175,6 +175,8 @@ internal static class Maneuvers
 
   internal static WaypointEnd EndToward(BaseLocomotive locomotive, CutSide side) => EndAwayFrom(locomotive, side == CutSide.Rear ? CutSide.Front : CutSide.Rear);
 
+  internal static int CarCount(BaseLocomotive locomotive) => locomotive.EnumerateCoupled().Count(IsCar);
+
   internal static bool IsCar(Car car) => car is not BaseLocomotive && !car.CarType.IsTender;
 
   private static void SetAnglecock(Car car, Car.LogicalEnd end, bool open)

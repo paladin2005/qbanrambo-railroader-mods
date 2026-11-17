@@ -236,7 +236,7 @@ internal sealed class TurntableWatch : MonoBehaviour
       var waypoint = new OrderWaypoint(Graph.LocationToString(location.Value), null);
       foreach (var direction in new[] { forward, !forward })
       {
-        if (!AutoEngineerPlanner.TryPlanRoute(job.Locomotive, job.Cars, length, direction, waypoint, Graph.Shared, out _, out var route, out var message, out var distance))
+        if (!AutoEngineerPlanner.TryPlanRoute(job.Locomotive, job.Cars, length, direction, waypoint, Graph.Shared, out _, out var route, out var message, out var distance, out _))
         {
           failure ??= message;
           continue;

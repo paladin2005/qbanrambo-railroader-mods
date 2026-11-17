@@ -45,7 +45,8 @@ internal sealed class RefuelWatch : MonoBehaviour
   internal static void Begin(BaseLocomotive locomotive, List<FuelStop> stops)
   {
     var fuelCar = Fuel.FuelCar(locomotive);
-    var pending = stops.Where(stop => Fuel.Slot(fuelCar, stop.Load) is { } slot && !Fuel.IsFull(slot, stop.Load)).ToList();
+    var cars = Fuel.FuelCars(locomotive);
+    var pending = stops.Where(stop => Fuel.NextCar(locomotive, cars, stop) != null).ToList();
     if (pending.Count == 0)
     {
       Say($"{locomotive.DisplayName} is already full");
@@ -120,8 +121,11 @@ internal sealed class RefuelWatch : MonoBehaviour
   private static Job Restore(BaseLocomotive locomotive, List<FuelStop> stops, RefuelMemory.Record record)
   {
     var job = new Job(locomotive, stops);
+    var next = Fuel.NextCar(locomotive, job.Cars, job.Stop);
+    if (next == null) return null;
+    job.Car = next;
+    job.Chosen = true;
     var slot = SlotFor(job);
-    if (slot == null || Fuel.IsFull(slot, job.Stop.Load)) return null;
     var orders = Helper(locomotive).Orders;
     if (record.Phase != nameof(Phase.Loading) && orders.Mode == AutoEngineerMode.Waypoint && orders.Waypoint?.LocationString == record.Location)
     {
@@ -139,7 +143,7 @@ internal sealed class RefuelWatch : MonoBehaviour
   private static void Remember(Job job)
   {
     if (job.Locomotive == null) return;
-    RefuelMemory.Remember(job.Locomotive.id, job.Phase.ToString(), job.LocationString, new[] { job.Stop }.Concat(job.Stops).Select(stop => stop.Id));
+    RefuelMemory.Remember(job.Locomotive.id, job.Phase.ToString(), job.LocationString, job.Ordered.Select(stop => stop.Id));
   }
 
   internal static void Clear()
@@ -228,7 +232,7 @@ internal sealed class RefuelWatch : MonoBehaviour
     if (job.Phase == Phase.BackingOff)
     {
       if (ours) helper.ClearWaypoint();
-      return !Advance(job, announce: false);
+      return !Retry(job);
     }
     var offset = Fuel.Offset(slot, stop);
     if (offset > ArrivalReach)
@@ -247,11 +251,12 @@ internal sealed class RefuelWatch : MonoBehaviour
     if (++job.Retries > MaxRetries)
     {
       Say($"{locomotive.DisplayName} couldn't line up with {Place(stop)}");
-      return !NextStop(job);
+      job.Remaining.Remove(stop);
+      return !Advance(job, announce: false);
     }
     if (travel != 0f) job.Lead = Mathf.Clamp(job.Lead - along * travel, -MaxLead, MaxLead);
     if (Mathf.Abs(along) < BackOffBelow && Fuel.BackOff(locomotive, stop, BackOffDistance, travel) is { } away) return !Send(job, away, Phase.BackingOff, announce: false);
-    return !Advance(job, announce: false);
+    return !Retry(job);
   }
 
   private static bool CheckLoading(Job job, FuelSlot slot)
@@ -268,8 +273,8 @@ internal sealed class RefuelWatch : MonoBehaviour
     if (Fuel.IsFull(slot, stop.Load))
     {
       Release(job);
-      Say($"{locomotive.DisplayName}: {stop.LoadName.ToLowerInvariant()} full");
-      return !NextStop(job);
+      Say($"{(job.Cars.Count > 1 ? job.Car.DisplayName : locomotive.DisplayName)}: {stop.LoadName.ToLowerInvariant()} full");
+      return !Advance(job, announce: false);
     }
     if (level > job.LastLevel + Progress)
     {
@@ -283,27 +288,39 @@ internal sealed class RefuelWatch : MonoBehaviour
     Say(Fuel.InStock(stop)
       ? $"{locomotive.DisplayName} isn't taking {stop.LoadName.ToLowerInvariant()} at {Place(stop)}"
       : $"{Place(stop)} ran out of {stop.LoadName.ToLowerInvariant()}");
-    return !NextStop(job);
-  }
-
-  private static bool NextStop(Job job)
-  {
-    if (job.Stops.Count == 0) return false;
-    job.Stop = job.Stops.Dequeue();
-    job.Retries = 0;
-    return Advance(job, announce: false);
+    job.Remaining.Remove(stop);
+    return !Advance(job, announce: false);
   }
 
   private static bool Advance(Job job, bool announce)
   {
     while (true)
     {
+      if (!Choose(job)) return false;
       if (Approach(job, announce)) return true;
-      if (job.Captured || job.Stops.Count == 0) return false;
-      job.Stop = job.Stops.Dequeue();
-      job.Retries = 0;
+      if (job.Captured) return false;
+      job.Remaining.Remove(job.Stop);
       announce = false;
     }
+  }
+
+  private static bool Retry(Job job)
+  {
+    if (Approach(job, announce: false)) return true;
+    if (job.Captured) return false;
+    job.Remaining.Remove(job.Stop);
+    return Advance(job, announce: false);
+  }
+
+  private static bool Choose(Job job)
+  {
+    var next = !job.Chosen && Fuel.NextCar(job.Locomotive, job.Cars, job.Stop) is { } first ? (Stop: job.Stop, Car: first) : Fuel.Nearest(job.Locomotive, job.Cars, job.Remaining);
+    job.Chosen = true;
+    if (next.Stop == null) return false;
+    if (next.Stop != job.Stop || next.Car != job.Car) job.Retries = 0;
+    job.Stop = next.Stop;
+    job.Car = next.Car;
+    return true;
   }
 
   private static bool Approach(Job job, bool announce)
@@ -341,7 +358,7 @@ internal sealed class RefuelWatch : MonoBehaviour
   {
     var locomotive = job.Locomotive;
     var helper = Helper(locomotive);
-    var key = string.Join(",", new[] { job.Stop }.Concat(job.Stops).Select(stop => stop.Id));
+    var key = string.Join(",", job.Ordered.Select(stop => stop.Id));
     AppDomain.CurrentDomain.SetData(Fuel.RefuelKey, announce ? key : null);
     AppDomain.CurrentDomain.SetData(GotoMenu.CapturedKey, null);
     var queued = false;
@@ -406,7 +423,7 @@ internal sealed class RefuelWatch : MonoBehaviour
     Fuel.Hatch(SlotFor(job), job.Stop.Load, false);
   }
 
-  private static FuelSlot SlotFor(Job job) => Fuel.Slot(Fuel.FuelCar(job.Locomotive), job.Stop.Load);
+  private static FuelSlot SlotFor(Job job) => Fuel.Slot(job.Car, job.Stop.Load);
 
   private static AutoEngineerOrdersHelper Helper(BaseLocomotive locomotive) => new(locomotive, new AutoEngineerPersistence(locomotive.KeyValueObject));
 
@@ -414,7 +431,7 @@ internal sealed class RefuelWatch : MonoBehaviour
 
   private static string Loads(Job job)
   {
-    var names = new[] { job.Stop }.Concat(job.Stops).Select(stop => stop.LoadName.ToLowerInvariant()).Distinct().ToList();
+    var names = job.Ordered.Select(stop => stop.LoadName.ToLowerInvariant()).Distinct().ToList();
     return names.Count == 1 ? names[0] : $"{string.Join(", ", names.Take(names.Count - 1))} and {names[names.Count - 1]}";
   }
 
@@ -432,13 +449,19 @@ internal sealed class RefuelWatch : MonoBehaviour
     public Job(BaseLocomotive locomotive, List<FuelStop> stops)
     {
       Locomotive = locomotive;
+      Cars = Fuel.FuelCars(locomotive);
+      Car = Fuel.FuelCar(locomotive);
       Stop = stops[0];
-      Stops = new Queue<FuelStop>(stops.Skip(1));
+      Remaining = stops.ToList();
       Started = Time.time;
     }
 
     public BaseLocomotive Locomotive { get; }
-    public Queue<FuelStop> Stops { get; }
+    public List<Car> Cars { get; }
+    public Car Car { get; set; }
+    public List<FuelStop> Remaining { get; }
+    public IEnumerable<FuelStop> Ordered => new[] { Stop }.Concat(Remaining.Where(stop => stop != Stop));
+    public bool Chosen { get; set; }
     public FuelStop Stop { get; set; }
     public float Started { get; }
     public Phase Phase { get; set; }

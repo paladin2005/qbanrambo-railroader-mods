@@ -4,7 +4,7 @@ Paints the game's terrain under Railroader's map, with its rivers, lakes and mou
 
 ## Requirements
 
-- Railroader 0.6.0 or later (the MoW Update; on the Steam **experimental** branch when this was released).
+- Railroader 0.6.3 or later (the MoW Update; on the Steam **experimental** branch when this was released). 0.6.3 changed the game's code this mod calls, so this version needs it, and earlier versions of the mod don't work on it.
 - **Allow Unsafe DLL Mods** turned on (see Install).
 - Nothing else: no Unity Mod Manager, BepInEx or other loader. Railroader loads the mod itself.
 
@@ -77,7 +77,7 @@ Right-click any track on the map for a menu, the game's own kind:
 - **Send <locomotive> here**: the selected locomotive's engineer gets a waypoint there, at its current speed limit, the same as picking the waypoint yourself, and a cyan pulse marks the spot. If there's no route, the pulse is red and the game's own message tells you why. Any handbrakes set in the train are released, and the message says how many. Greyed out until you select a locomotive.
 - **Place fusee** or, near one, **Extinguish fusee**: the engineer of any train stops at a lit fusee, as with the game's own fusees. Greyed out when your role can't place them.
 
-Right-click a car for **Couple <locomotive> to <car>**: the selected locomotive's engineer drives to the end of that car's cut nearer the car you clicked (click the first or last car to pick the end; the middle car takes the quicker one) and couples, the same as picking the car with the game's waypoint tool. Once coupled and stopped, the air is connected and the handbrakes released, and a message says how many cars it took. Greyed out until you select a locomotive, and for cars already in its train. The web map has the same item on its right-click menu. With the Train Orders window open, the coupling is added to the orders instead.
+Right-click a car for **Couple <locomotive> to <car>**: the selected locomotive's engineer drives to the end of that car's cut nearer the car you clicked (click the first or last car to pick the end; the middle car takes the quicker one) and couples, the same as picking the car with the game's waypoint tool. Before it sets off, its own train gets ready to move: the air connected along it, the brake pipe closed at both ends and the handbrakes released. Once coupled and stopped, the air is connected and the handbrakes released, and a message says how many cars it took. Greyed out until you select a locomotive, and for cars already in its train. The web map has the same item on its right-click menu. With the Train Orders window open, the coupling is added to the orders instead.
 
 If you're already picking a waypoint the game's way, right-click works as before.
 
@@ -185,6 +185,17 @@ Disable **Map Plus** in **Mods**, or delete its folder from `Documents\Railroade
 
 ## Changelog
 
+### 1.9.1
+
+- Hotfix with Goto 1.9.1 and Train Orders 1.11.1 for Railroader 0.6.3, which lost their right-click menu entries on it. In Map Plus, the web map's station details drop the **Flag stop** line, since 0.6.3 removed flag stops from the game.
+
+### 1.9.0
+
+- **Updated for Railroader 0.6.3: the game update changed code the mod calls, so the earlier versions broke on it (the mod didn't load at all); this version needs 0.6.3 or later.**
+- **Open the map where you are** (Preferences > Mods > Map Plus, off by default): the game's map opens centred on your camera every time, as the Locate Me button does.
+- **Couple to a car from the game's map** gets the engine's own train ready before it sets off: the air connected along it, the brake pipe closed at both ends (an open end kept the brakes on) and the handbrakes released.
+- The web map's orders panel has **Clear done**, and the orders describe Train Orders 1.11.0's new waits: Until the coaches are full (with its time) and Until the train has N cars.
+
 ### 1.8.0
 
 - **Couple to a car from the game's map** couples at the end of the cut nearer the car you right-click, so you can pick the end, for a run around for one. It also picks the way there with the fewest moves, so the train backs straight in instead of turning on a wye.
@@ -202,7 +213,7 @@ Disable **Map Plus** in **Mods**, or delete its folder from `Documents\Railroade
 - **Couple to a car from the game's map**: right-click a car for Couple <locomotive> to <car>; air connected and handbrakes released once coupled.
 - **Highlighted tracks on both maps**: what the game lights up on the track (a waybill destination you hover, a turntable track in Goto's menu, a construction stake) glows and pulses on the maps; Train Orders' preview of the train after an order and the game's waypoint picker footprint show on them too.
 - **More on the web map**: the game's track condition stripes, the selected train's destination tracks, the names of passing tracks (Cowee, Barkers, Thomas Valley…), speed limit numbers, and layer switches for the route, destinations, orders, industry tracks, mainline and cars; the toolbar sits beside the search box.
-- **The game's map**: a click on a car opens its Inspect window and keeps your selected train, Shift-click selects, as on the game's own map; **Click selects the train** in Preferences > Mods brings the old click back. Hovering a place outlines its cars, amber on the way and green spotted.
+- **The game's map**: a click on a car opens its Inspect window and keeps your selected train, Shift-click selects, as on the game's own map; **Open the map where you are** in Preferences > Mods opens it centred on your camera every time; **Click selects the train** in Preferences > Mods brings the old click back. Hovering a place outlines its cars, amber on the way and green spotted.
 - **Passengers**: passenger cars show their passengers against their seats ("35/60 passengers") and the train symbol from your timetable ("Train 1 W") instead of Empty and No waybill; the train panel and a locomotive's hover show the whole train's passengers and how many go to each station.
 - **Smoother route**: the route's stripes flow without jumps, and a route that passes back near the train is no longer drawn shorter than it is.
 - **Settings in Preferences > Mods** have a cleaner layout: each checkbox first, with its full name beside it.

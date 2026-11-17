@@ -14,6 +14,22 @@ internal static class Passengers
 {
   internal static List<Car> Coaches(Car locomotive) => locomotive.EnumerateCoupled().Where(car => car.IsPassengerCar()).ToList();
 
+  private const string PassengerLoad = "rr/passengers";
+
+  internal static (int Riders, int Seats) Seats(Car locomotive)
+  {
+    var riders = 0;
+    var seats = 0;
+    foreach (var coach in Coaches(locomotive))
+    {
+      var slot = coach.Definition?.LoadSlots?.FirstOrDefault(candidate => candidate.RequiredLoadIdentifier == PassengerLoad);
+      if (slot == null) continue;
+      seats += (int)Math.Round(slot.MaximumCapacity);
+      riders += coach.GetPassengerMarker()?.TotalPassengers ?? 0;
+    }
+    return (riders, seats);
+  }
+
   internal static bool StopsEnabled => StateManager.Shared.Storage.AIPassengerStopEnable;
 
   internal static List<PassengerStop> Available()
@@ -139,7 +155,7 @@ internal static class Passengers
   private static float? RouteDistance(BaseLocomotive locomotive, List<Car> cars, float length, bool forward, Location location, ref string failure)
   {
     var waypoint = new OrderWaypoint(Graph.LocationToString(location), null);
-    if (AutoEngineerPlanner.TryPlanRoute(locomotive, cars, length, forward, waypoint, Graph.Shared, out _, out _, out var message, out var distance)) return distance;
+    if (AutoEngineerPlanner.TryPlanRoute(locomotive, cars, length, forward, waypoint, Graph.Shared, out _, out _, out var message, out var distance, out _)) return distance;
     failure ??= message;
     return null;
   }

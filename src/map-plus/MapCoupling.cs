@@ -63,6 +63,7 @@ internal static class MapCoupling
     sent = true;
     if (captured) return $"{locomotive.DisplayName}: coupling to {name} was added to its orders";
     MapCoupleWatch.Begin(locomotive, target, order.Value.LocationString);
+    ConnectAir(locomotive);
     var released = MapWaypoints.ReleaseHandbrakes(locomotive);
     var handbrakes = released == 0 ? "" : $", released {released} {(released == 1 ? "handbrake" : "handbrakes")}";
     return $"{locomotive.DisplayName} heading to couple to {name}{handbrakes}";

@@ -316,6 +316,10 @@ internal static class WebTrain
           return step["exit"].IsNull ? $"Turn around at the {turntable}" : $"Use the {turntable}";
         case 19:
           return "Wait until no car is spotted";
+        case 21:
+          return count >= 0 ? $"Wait until the coaches are full or {count / 60}:{count % 60:D2}" : "Wait until the coaches are full";
+        case 22:
+          return count == 1 ? "Wait until the train has a car" : $"Wait until the train has {count} cars";
         case 20:
           return $"Run the saved job \"{step["job"].StringValueOrDefault("")}\"";
         default:
